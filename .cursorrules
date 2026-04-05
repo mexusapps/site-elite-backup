@@ -1,0 +1,46 @@
+# ELITE SOFTWARE ENGINEERING FRAMEWORK (30 SKILLS)
+
+## [MOD 1: ARQUITETURA E LÓGICA DE ALTA DENSIDADE]
+1. [Architecture & Pattern Orchestration]: Implementar arquitetura baseada em Clean Architecture e Screaming Architecture. Diretriz: Isolar Core Business Logic da UI via Separation of Concerns (SoC). Usar Atomic Design para estrutura de diretórios.
+2. [High-Density Modular Code]: Codificação funcional sob princípios SOLID. Componentes com máximo de 100 linhas. Extração obrigatória de lógica complexa para Custom Hooks ou Composables.
+3. [Token-Efficient Logic Optimization]: Algoritmia de baixa complexidade ciclomática. Priorizar métodos nativos (.map, .filter, .reduce). Implementar Early Returns para reduzir aninhamento e otimizar a leitura da IA.
+4. [Relational Schema & RLS Engineering]: Modelagem PostgreSQL/Supabase na 3ª Forma Normal (3NF). Implementação nativa de Row Level Security (RLS) e integridade referencial rigorosa desde o setup.
+5. [Robust API & State Middleware]: Gestão de estado asíncrono via TanStack Query (Caching/Revalidation). Uso de Zustand para estado global minimalista. Respostas de API padronizadas com Error Handling resiliente.
+
+## [MOD 2: UI/UX E DESIGN DE ALTA FIDELIDADE]
+6. [High-End Glassmorphism & Depth]: Camadas visuais via Backdrop-filter (blur). Bordas semi-transparentes e sombras estratificadas (Z-index management) para profundidade premium.
+7. [Fluid Responsive Layout]: Design Mobile-first absoluto. Uso da função CSS clamp() para tipografia e gaps dinâmicos. Touch target mínimo de 44px para usabilidade móvel.
+8. [Micro-interactions & Framer Motion]: Animações de feedback baseadas em estado (200ms-300ms). Easing 'spring' para sensação orgânica. Proibido animações puramente decorativas que aumentem o bundle.
+9. [Semantic Typographic Hierarchy]: Escala áurea (1.250) em unidades REM. Otimização de letter-spacing em headers e line-height (1.5-1.6) para reduzir fadiga visual.
+10. [Dynamic Theme Engine]: Gestão de Design Tokens via variáveis CSS nativas. Suporte total a prefers-color-scheme (Dark/Light) com contraste WCAG AA+ garantido.
+
+## [MOD 3: PERFORMANCE E ECONOMIA DE RUNTIME]
+11. [Edge-Computing & SWR Orchestration]: Sincronização de estado via Stale-While-Revalidate. Minimizar Round-trips ao servidor com cache local agressivo.
+12. [Asset Pipeline Optimization]: Imagens WebP/AVIF com srcset. Lazy Loading nativo e priorização de LCP (Largest Contentful Paint) para performance extrema.
+13. [Infinite Scroll & Virtualized Lists]: Implementação de Windowing (Virtualized Lists) para grandes datasets, mantendo 60fps constantes e baixo consumo de memória.
+14. [Bundle Size Minimization]: Code Splitting via Dynamic Imports. Remoção de dependências pesadas em favor de Vanilla JS e utilitários leves para manter o First Paint rápido.
+15. [Predictive Navigation & Prefetching]: Antecipação de navegação via prefetch de rotas no hover. Transições de página não-bloqueantes.
+
+## [MOD 4: SEGURANÇA E ENGENHARIA DE EXPERIÊNCIA]
+16. [High-Fidelity Form Engineering]: Zod Schema Validation integrado ao React Hook Form. Validação tipada, sanitizada e feedback de erro inline em tempo real.
+17. [Native-Feel Interaction]: Implementação de Pull-to-refresh, Swipe-to-dismiss e remoção do delay de toque (300ms) para emular apps nativos.
+18. [Zero-Trust Security & Guard]: Blindagem contra XSS e SQL Injection via sanitização rigorosa. Middlewares de borda para validação de JWT e proteção de rotas privadas.
+19. [A11y Compliant Architecture]: Semântica HTML5 pura, WAI-ARIA roles corretas e navegabilidade 100% via teclado (tab-index) para acessibilidade universal.
+20. [Auth Flow Specialist]: Fluxos resilientes (OAuth, Magic Links) com renovação silenciosa de tokens (Refresh Tokens) e persistência segura via cookies HttpOnly.
+
+## [MOD 5: REFINAMENTO, ESCALA E VISIBILIDADE]
+21. [Search Engine Intelligence (SEO)]: SSR/SSG com injeção de metadados dinâmicos, OpenGraph e dados estruturados JSON-LD para indexação de elite.
+22. [UX Copywriting Precision]: Micro-copy direto, ativo e focado em conversão. Mensagens de sistema claras que guiam o usuário em casos de falha.
+23. [Automated QA & Error Tracking]: Monitoramento proativo via Sentry. Implementação de Smoke Tests em fluxos críticos antes de cada deploy.
+24. [Internationalization (i18n)]: Estrutura de localização via arquivos JSON. Separação total de hard-coded strings da lógica de software.
+25. [Event-Driven Analytics]: Tracking de comportamento via Data Layer (Mixpanel/GA4) sem impactar o carregamento ou a privacidade (LGPD).
+26. [PWA & Offline-First]: Service Workers para caching de assets e funcionamento em redes instáveis. Manifest.json configurado para instalação.
+27. [CI/CD Pipeline Mastery]: Deploys atômicos com linting, type-check e testes unitários automatizados antes da publicação em produção.
+28. [Cloud Scalability Planning]: Arquitetura Serverless com Edge Functions para latência global mínima e escalabilidade horizontal automática.
+29. [Design System Governance]: Tailwind Config centralizado (Design Tokens). Componentes reutilizáveis e documentados para acelerar o desenvolvimento.
+30. [Final Performance Audit]: Nota 100 no Lighthouse. Otimização técnica de Core Web Vitals (FID, LCP, CLS) para ranking máximo em buscadores.
+42. [Absolute Layout Precision]: OBRIGATÓRIO usar Plano XY absoluto para layouts de documentos. Proibido atrelar a posição de um elemento a outro (ex: footer dependendo do total). Cada campo deve ter sua coordenada 'top' independente e fixa conforme o template.
+
+## REGRAS DE SAÍDA (TOKEN ECONOMY):
+- NUNCA reescreva arquivos inteiros para mudanças parciais; use blocos // ... código existente ...
+- Respostas técnicas, diretas e sem introduções ou conclusões prolixas.
