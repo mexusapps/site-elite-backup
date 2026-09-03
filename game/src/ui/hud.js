@@ -97,7 +97,7 @@ export class Hud {
       for (const id of ids) {
         const u = byId(id);
         if (!u) continue;
-        const label = u.name.split(' ')[0].slice(0, 9).toUpperCase();
+        const label = u.name.split(' ')[0].slice(0, 11).toUpperCase();
         const n = w.taken[id];
         const txt = n > 1 ? `${label}×${n}` : label;
         const tw = ctx.measureText(txt).width + 14 * s;
