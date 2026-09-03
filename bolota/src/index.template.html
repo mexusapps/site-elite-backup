@@ -1,0 +1,158 @@
+<title>BOLOTA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap">
+<style>
+  :root{
+    --te:1;
+    --fundo:#101c18;
+    --painel:rgba(20,34,29,0.93);
+    --tinta:#fdf3e2;
+    --tinta2:#b9c7ad;
+    --luz:#ffd9a0;
+    --luz2:#ffb15e;
+    --verde:#a3d96b;
+    --agua:#a8ecff;
+    --fonte:'Baloo 2','Trebuchet MS',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;padding:0}
+  body{
+    background:var(--fundo);color:var(--tinta);font-family:var(--fonte);
+    overflow:hidden;overscroll-behavior:none;-webkit-font-smoothing:antialiased;
+    touch-action:none;user-select:none;
+  }
+  #jogo{position:fixed;inset:0;display:block;background:var(--fundo);cursor:crosshair}
+
+  #ui{
+    position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
+    padding:calc(18px * var(--te));font-size:calc(16px * var(--te));overflow-y:auto;
+    background:radial-gradient(120% 90% at 50% 40%,rgba(10,18,15,.35),rgba(8,14,12,.78));
+    backdrop-filter:blur(2px);
+  }
+  #ui[hidden]{display:none}
+  .tela{display:none;width:100%;max-width:min(1020px,100%);animation:sobe .22s ease-out}
+  .tela.on{display:block}
+  @keyframes sobe{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.tela{animation:none}}
+
+  .painel{
+    background:var(--painel);
+    border:calc(2px * var(--te)) solid rgba(255,217,160,.22);
+    border-radius:calc(26px * var(--te));
+    padding:calc(26px * var(--te));max-width:min(560px,100%);margin:0 auto;
+    box-shadow:0 calc(20px * var(--te)) calc(54px * var(--te)) rgba(0,0,0,.55);
+  }
+  .painel.largo{max-width:min(960px,100%)}
+
+  h1,h2,h3{margin:0;font-weight:800;text-wrap:balance}
+  h2{font-size:calc(31px * var(--te));margin-bottom:calc(8px * var(--te));color:var(--luz)}
+  h3{font-size:calc(18px * var(--te));margin:calc(18px * var(--te)) 0 calc(6px * var(--te));color:var(--verde)}
+  h3:first-child{margin-top:0}
+  p{margin:0 0 calc(10px * var(--te));line-height:1.5;color:#e7ded0}
+  p.fino{font-size:calc(14px * var(--te));color:var(--tinta2)}
+  b{color:var(--luz)}
+  kbd{
+    font-family:var(--fonte);font-weight:700;font-size:calc(12.5px * var(--te));
+    border:2px solid rgba(255,255,255,.22);border-radius:calc(7px * var(--te));
+    padding:calc(1px * var(--te)) calc(7px * var(--te));background:rgba(255,255,255,.07);
+    margin-right:2px;
+  }
+
+  .capa{text-align:center;padding:calc(8px * var(--te))}
+  .logo{display:flex;justify-content:center;gap:.03em;font-size:clamp(46px,11vw,112px);font-weight:800;line-height:1}
+  .logo span{
+    background:linear-gradient(180deg,#fff6e2 0%,var(--luz) 38%,var(--luz2) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 calc(3px * var(--te)) calc(20px * var(--te)) rgba(255,177,94,.45));
+    animation:balanca 3.6s ease-in-out infinite;
+  }
+  .logo span:nth-child(2){animation-delay:.1s}
+  .logo span:nth-child(3){animation-delay:.2s}
+  .logo span:nth-child(4){animation-delay:.3s}
+  .logo span:nth-child(5){animation-delay:.4s}
+  .logo span:nth-child(6){animation-delay:.5s}
+  @keyframes balanca{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  @media (prefers-reduced-motion:reduce){.logo span{animation:none}}
+  .lema{color:var(--tinta2);font-size:calc(17px * var(--te));margin:calc(10px * var(--te)) 0 calc(24px * var(--te))}
+  .rodape{color:var(--tinta2);font-size:calc(13.5px * var(--te));margin-top:calc(16px * var(--te))}
+
+  .menu{display:flex;flex-direction:column;gap:calc(10px * var(--te));align-items:center}
+  .menu.linha{flex-direction:row;justify-content:center;flex-wrap:wrap;margin-top:calc(20px * var(--te))}
+  button{
+    font-family:var(--fonte);font-size:calc(18px * var(--te));font-weight:700;color:var(--tinta);
+    background:rgba(255,255,255,.07);
+    border:calc(2px * var(--te)) solid rgba(255,255,255,.2);
+    border-radius:999px;padding:calc(11px * var(--te)) calc(30px * var(--te));
+    min-width:calc(240px * var(--te));min-height:calc(50px * var(--te));cursor:pointer;
+    transition:transform .08s,background .12s,border-color .12s;
+  }
+  .menu.linha button{min-width:calc(160px * var(--te))}
+  button:hover{background:rgba(255,217,160,.14);border-color:var(--luz)}
+  button:active{transform:translateY(2px)}
+  button:focus-visible{outline:calc(3px * var(--te)) solid var(--luz);outline-offset:3px}
+  button.grande{
+    background:linear-gradient(180deg,var(--luz),var(--luz2));color:#33200a;
+    border-color:rgba(255,255,255,.4);font-size:calc(21px * var(--te));
+    box-shadow:0 0 calc(30px * var(--te)) rgba(255,177,94,.32);
+  }
+  button.perigo{color:#ff9d92;border-color:rgba(255,157,146,.35)}
+
+  .colunas{display:grid;grid-template-columns:1fr;gap:calc(22px * var(--te))}
+  @media (min-width:800px){.colunas{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}}
+
+  .ctl{display:flex;align-items:center;gap:calc(10px * var(--te));margin-bottom:calc(11px * var(--te));font-size:calc(15px * var(--te));color:#e2d9c8}
+  .ctl>span{flex:0 0 calc(128px * var(--te))}
+  input[type=range]{flex:1;accent-color:var(--luz);min-width:0;height:calc(26px * var(--te))}
+  select{
+    flex:1;font-family:var(--fonte);font-size:calc(15px * var(--te));font-weight:700;
+    background:rgba(255,255,255,.1);color:var(--tinta);border:2px solid rgba(255,255,255,.22);
+    border-radius:calc(12px * var(--te));padding:calc(7px * var(--te)) calc(10px * var(--te));
+  }
+  output{flex:0 0 calc(46px * var(--te));text-align:right;color:var(--luz);font-weight:800}
+  input:focus-visible,select:focus-visible{outline:calc(3px * var(--te)) solid var(--luz);outline-offset:2px}
+
+  /* trilha de fases */
+  .capitulo{margin-bottom:calc(16px * var(--te))}
+  .grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(150px * var(--te)),1fr));gap:calc(10px * var(--te));margin-top:calc(8px * var(--te))}
+  button.fase{
+    min-width:0;min-height:calc(92px * var(--te));padding:calc(10px * var(--te));
+    border-radius:calc(18px * var(--te));display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:calc(2px * var(--te));position:relative;
+  }
+  button.fase .num{font-size:calc(24px * var(--te));font-weight:800;line-height:1;color:var(--luz)}
+  button.fase .nome{font-size:calc(14px * var(--te));font-weight:700}
+  button.fase .gotas{font-size:calc(13px * var(--te));color:var(--agua);letter-spacing:.16em}
+  button.fase .ok{position:absolute;top:calc(6px * var(--te));right:calc(11px * var(--te));font-size:calc(14px * var(--te));color:var(--verde)}
+  button.fase.feita{border-color:rgba(163,217,107,.5);background:rgba(163,217,107,.1)}
+
+  /* o momento de evolução */
+  .evolucao{
+    display:flex;align-items:center;gap:calc(14px * var(--te));
+    margin:calc(6px * var(--te)) 0 calc(16px * var(--te));
+    padding:calc(14px * var(--te));border-radius:calc(20px * var(--te));
+    background:linear-gradient(135deg,rgba(163,217,107,.18),rgba(255,217,160,.12));
+    border:calc(2px * var(--te)) solid rgba(163,217,107,.42);
+    animation:pulsa 2.4s ease-in-out infinite;
+  }
+  @keyframes pulsa{0%,100%{box-shadow:0 0 0 rgba(163,217,107,0)}50%{box-shadow:0 0 calc(26px * var(--te)) rgba(163,217,107,.28)}}
+  @media (prefers-reduced-motion:reduce){.evolucao{animation:none}}
+  .evolucao .selo{font-size:calc(38px * var(--te));line-height:1}
+  .evolucao .rot{display:block;font-size:calc(12.5px * var(--te));letter-spacing:.1em;text-transform:uppercase;color:var(--tinta2)}
+  .evolucao strong{display:block;font-size:calc(24px * var(--te));color:var(--verde)}
+  .evolucao .desc{display:block;font-size:calc(14.5px * var(--te));color:#e7ded0}
+
+  dl.marcas{margin:calc(6px * var(--te)) 0 0}
+  dl.marcas>div{display:flex;justify-content:space-between;gap:calc(14px * var(--te));padding:calc(9px * var(--te)) 0;border-bottom:1px solid rgba(255,255,255,.1)}
+  dl.marcas dt{color:var(--tinta2);font-size:calc(15px * var(--te));margin:0}
+  dl.marcas dd{margin:0;font-weight:800;font-size:calc(17px * var(--te))}
+
+  @media (max-width:620px){
+    .painel{padding:calc(18px * var(--te));border-radius:calc(20px * var(--te))}
+    button{min-width:calc(200px * var(--te));font-size:calc(16px * var(--te))}
+  }
+</style>
+
+<canvas id="jogo" tabindex="0" aria-label="BOLOTA — jogo de saltos numa clareira"></canvas>
+<div id="ui" hidden></div>
+<script>__SCRIPT__</script>

@@ -1,0 +1,16 @@
+{
+  "name": "bolota",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "BOLOTA — jogo de salto e crescimento",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test/run.mjs",
+    "fisica": "node test/fisica.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "playwright": "^1.62.1"
+  }
+}
