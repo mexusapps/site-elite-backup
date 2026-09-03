@@ -1,0 +1,158 @@
+<title>PRISMA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap">
+<style>
+  :root{
+    --te:1;
+    --fundo:#0b1026;
+    --painel:rgba(20,26,58,0.92);
+    --tinta:#f2ecff;
+    --tinta2:#a89ecb;
+    --luz:#ffe9a0;
+    --luz2:#ffc95e;
+    --verde:#8fe6a4;
+    --rosa:#ff6bd6;
+    --fonte:'Nunito','Trebuchet MS',system-ui,sans-serif;
+  }
+  html[data-paleta="contraste"]{
+    --fundo:#000; --painel:#000; --tinta:#fff; --tinta2:#ccc; --luz:#ffd400; --luz2:#ffae00; --verde:#00e676;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;padding:0}
+  body{
+    background:var(--fundo);color:var(--tinta);font-family:var(--fonte);
+    overflow:hidden;overscroll-behavior:none;-webkit-font-smoothing:antialiased;
+    touch-action:none;user-select:none;
+  }
+  #jogo{position:fixed;inset:0;display:block;background:var(--fundo);cursor:pointer}
+
+  #ui{
+    position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
+    padding:calc(18px * var(--te));font-size:calc(16px * var(--te));overflow-y:auto;
+  }
+  #ui[hidden]{display:none}
+  .tela{display:none;width:100%;max-width:min(1020px,100%);animation:sobe .22s ease-out}
+  .tela.on{display:block}
+  @keyframes sobe{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.tela{animation:none}}
+
+  .painel{
+    background:var(--painel);
+    border:calc(2px * var(--te)) solid rgba(255,233,160,.22);
+    border-radius:calc(24px * var(--te));
+    padding:calc(26px * var(--te));max-width:min(560px,100%);margin:0 auto;
+    box-shadow:0 calc(18px * var(--te)) calc(50px * var(--te)) rgba(0,0,0,.5);
+  }
+  .painel.largo{max-width:min(960px,100%)}
+
+  h1,h2,h3{margin:0;font-weight:800;text-wrap:balance}
+  h2{font-size:calc(30px * var(--te));margin-bottom:calc(8px * var(--te));color:var(--luz)}
+  h3{font-size:calc(18px * var(--te));margin:calc(18px * var(--te)) 0 calc(6px * var(--te));color:var(--verde)}
+  h3:first-child{margin-top:0}
+  p{margin:0 0 calc(10px * var(--te));line-height:1.5;color:#ddd6f2}
+  p.fino{font-size:calc(14px * var(--te));color:var(--tinta2)}
+  b{color:var(--luz)}
+  kbd{
+    font-family:var(--fonte);font-weight:700;font-size:calc(12.5px * var(--te));
+    border:2px solid rgba(255,255,255,.22);border-radius:calc(7px * var(--te));
+    padding:calc(1px * var(--te)) calc(7px * var(--te));background:rgba(255,255,255,.07);
+    margin-right:2px;
+  }
+
+  .capa{text-align:center;padding:calc(8px * var(--te))}
+  .logo{display:flex;justify-content:center;gap:.04em;font-size:clamp(46px,11vw,110px);font-weight:800;line-height:1}
+  .logo span{
+    background:linear-gradient(180deg,#fff 0%,var(--luz) 40%,var(--luz2) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 calc(22px * var(--te)) rgba(255,201,94,.55));
+    animation:brilha 3s ease-in-out infinite;
+  }
+  .logo span:nth-child(2){animation-delay:.12s}
+  .logo span:nth-child(3){animation-delay:.24s}
+  .logo span:nth-child(4){animation-delay:.36s}
+  .logo span:nth-child(5){animation-delay:.48s}
+  .logo span:nth-child(6){animation-delay:.6s}
+  @keyframes brilha{0%,100%{opacity:1}50%{opacity:.72}}
+  @media (prefers-reduced-motion:reduce){.logo span{animation:none}}
+  .lema{color:var(--tinta2);font-size:calc(17px * var(--te));margin:calc(10px * var(--te)) 0 calc(24px * var(--te))}
+  .rodape{color:var(--tinta2);font-size:calc(13.5px * var(--te));margin-top:calc(16px * var(--te))}
+
+  .menu{display:flex;flex-direction:column;gap:calc(10px * var(--te));align-items:center}
+  .menu.linha{flex-direction:row;justify-content:center;flex-wrap:wrap;margin-top:calc(20px * var(--te))}
+  button{
+    font-family:var(--fonte);font-size:calc(18px * var(--te));font-weight:700;color:var(--tinta);
+    background:rgba(255,255,255,.07);
+    border:calc(2px * var(--te)) solid rgba(255,255,255,.2);
+    border-radius:999px;padding:calc(11px * var(--te)) calc(30px * var(--te));
+    min-width:calc(240px * var(--te));min-height:calc(50px * var(--te));cursor:pointer;
+    transition:transform .08s,background .12s,border-color .12s;
+  }
+  .menu.linha button{min-width:calc(160px * var(--te))}
+  button:hover{background:rgba(255,233,160,.14);border-color:var(--luz)}
+  button:active{transform:translateY(2px)}
+  button:focus-visible{outline:calc(3px * var(--te)) solid var(--luz);outline-offset:3px}
+  button.grande{
+    background:linear-gradient(180deg,var(--luz),var(--luz2));color:#2a1a05;
+    border-color:rgba(255,255,255,.4);font-size:calc(21px * var(--te));
+    box-shadow:0 0 calc(28px * var(--te)) rgba(255,201,94,.35);
+  }
+  button.perigo{color:#ff8fa0;border-color:rgba(255,143,160,.35)}
+
+  .colunas{display:grid;grid-template-columns:1fr;gap:calc(22px * var(--te))}
+  @media (min-width:800px){.colunas{grid-template-columns:repeat(3,1fr)}}
+
+  .ctl{display:flex;align-items:center;gap:calc(10px * var(--te));margin-bottom:calc(11px * var(--te));font-size:calc(15px * var(--te));color:#ded7f0}
+  .ctl>span{flex:0 0 calc(120px * var(--te))}
+  .ctl.marca{align-items:flex-start}
+  .ctl.marca>span{flex:1}
+  input[type=range]{flex:1;accent-color:var(--luz);min-width:0;height:calc(26px * var(--te))}
+  input[type=checkbox]{width:calc(22px * var(--te));height:calc(22px * var(--te));accent-color:var(--luz);flex:none}
+  select{
+    flex:1;font-family:var(--fonte);font-size:calc(15px * var(--te));font-weight:700;
+    background:rgba(255,255,255,.1);color:var(--tinta);border:2px solid rgba(255,255,255,.22);
+    border-radius:calc(12px * var(--te));padding:calc(7px * var(--te)) calc(10px * var(--te));
+  }
+  output{flex:0 0 calc(46px * var(--te));text-align:right;color:var(--luz);font-weight:800}
+  input:focus-visible,select:focus-visible{outline:calc(3px * var(--te)) solid var(--luz);outline-offset:2px}
+
+  /* mapa de fases */
+  .capitulo{margin-bottom:calc(16px * var(--te))}
+  .capitulo h3{margin-bottom:2px}
+  .grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(86px * var(--te)),1fr));gap:calc(8px * var(--te));margin-top:calc(8px * var(--te))}
+  button.jardim{
+    min-width:0;min-height:calc(72px * var(--te));padding:calc(8px * var(--te)) calc(4px * var(--te));
+    border-radius:calc(16px * var(--te));display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:calc(2px * var(--te));position:relative;
+  }
+  button.jardim .num{font-size:calc(22px * var(--te));font-weight:800;line-height:1}
+  button.jardim .min{font-size:calc(11px * var(--te));color:var(--tinta2);font-weight:700}
+  button.jardim .ok{position:absolute;top:calc(5px * var(--te));right:calc(9px * var(--te));font-size:calc(14px * var(--te));color:var(--luz)}
+  button.jardim.feito{border-color:rgba(143,230,164,.5);background:rgba(143,230,164,.1)}
+  button.jardim.perfeito{border-color:var(--luz);background:rgba(255,233,160,.14)}
+
+  /* ajuda */
+  .pecas{display:flex;flex-direction:column;gap:calc(10px * var(--te))}
+  .peca{display:flex;align-items:center;gap:calc(10px * var(--te))}
+  .peca canvas{flex:none;background:rgba(255,255,255,.05);border-radius:calc(12px * var(--te))}
+  .peca strong{display:block;font-size:calc(15px * var(--te));color:var(--luz)}
+  .peca span{display:block;font-size:calc(13.5px * var(--te));color:var(--tinta2);line-height:1.35}
+  .cores{display:flex;flex-wrap:wrap;gap:calc(8px * var(--te));margin:calc(6px * var(--te)) 0 calc(10px * var(--te))}
+  .cor{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .cor span{font-size:calc(11.5px * var(--te));color:var(--tinta2);font-weight:700}
+
+  dl.marcas{margin:calc(6px * var(--te)) 0 0}
+  dl.marcas>div{display:flex;justify-content:space-between;gap:calc(14px * var(--te));padding:calc(9px * var(--te)) 0;border-bottom:1px solid rgba(255,255,255,.1)}
+  dl.marcas dt{color:var(--tinta2);font-size:calc(15px * var(--te));margin:0}
+  dl.marcas dd{margin:0;font-weight:800;font-size:calc(17px * var(--te))}
+  dl.marcas .recorde dt,dl.marcas .recorde dd{color:var(--luz)}
+
+  @media (max-width:620px){
+    .painel{padding:calc(18px * var(--te));border-radius:calc(18px * var(--te))}
+    button{min-width:calc(200px * var(--te));font-size:calc(16px * var(--te))}
+  }
+</style>
+
+<canvas id="jogo" tabindex="0" aria-label="PRISMA — quebra-cabeça de luz e cor"></canvas>
+<div id="ui" hidden></div>
+<script>__SCRIPT__</script>
