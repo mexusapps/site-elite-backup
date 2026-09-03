@@ -1,3 +1,4 @@
 node_modules/
 dist/fotos/
 arte/.cache/
+mockup/*.build.html
