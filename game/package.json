@@ -1,0 +1,19 @@
+{
+  "name": "brasa",
+  "version": "1.0.0",
+  "description": "BRASA — jogo de ação em arena, feito do zero",
+  "main": "index.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test/run.mjs",
+    "dev": "node build.mjs --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "playwright": "^1.62.1"
+  },
+  "type": "module"
+}
