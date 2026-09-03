@@ -15,14 +15,15 @@
 
 import { TAU, clamp, lerp, damp, easeOutCubic } from '../core/math.js';
 import {
-  fbm, mancha, contornoVivo, pintarTerreno, arvore, samambaia, tufo,
+  fbm, mancha, moita, contornoVivo, pintarTerreno, arvore, samambaia, tufo,
   florzinha, cogumelo, mistura, comAlfa, nevoar, grao,
 } from './arte.js';
-import { desenharBolota } from './personagem.js';
+import { Personagem } from './personagem.js';
+import { PosFX } from './posfx.js';
 
 export const PALETA = {
   amanhecer: {
-    ceuAlto: '#3a6389', ceuMedio: '#8fb2bd', ceuBaixo: '#f6c98f', ceuHorizonte: '#ffe9c0',
+    ceuAlto: '#36597f', ceuMedio: '#8aa9ae', ceuBaixo: '#f5c187', ceuHorizonte: '#ffdfae',
     sol: '#fff2cf', solHalo: '#ffca7a',
     morroLonge: '#4a6a78', morroMeio: '#3b5a60', morroPerto: '#2d474a',
     mataLonge: '#33565a', mataMeio: '#28474b',
@@ -87,14 +88,31 @@ export class Camera {
 
 // ---------------------------------------------------------------------------
 export class Cena {
-  constructor(canvas) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+  /**
+   * @param {HTMLCanvasElement} saida  onde o quadro final aparece
+   * @param {HTMLCanvasElement} hud    camada de interface, fora do acabamento
+   */
+  constructor(saida, hud, op = {}) {
+    this.saida = saida;
+    this.hudCanvas = hud;
+    this.hudCtx = hud ? hud.getContext('2d') : null;
+
+    // Com WebGL a cena é pintada numa tela fora do ecrã e vira textura; sem
+    // WebGL a mesma pintura vai direto para a tela visível e o acabamento
+    // volta a ser feito em 2D. O jogo é idêntico nos dois caminhos.
+    this.pos = new PosFX(saida, op);
+    if (this.pos.ok) {
+      this.canvas = document.createElement('canvas');
+    } else {
+      this.canvas = saida;
+    }
+    this.ctx = this.canvas.getContext('2d');
     this.luz = document.createElement('canvas');
     this.luzCtx = this.luz.getContext('2d');
     this.borr = document.createElement('canvas');
     this.borrCtx = this.borr.getContext('2d');
     this.pal = PALETA.amanhecer;
+    this.boneco = new Personagem();
     this.t = 0;
     this.brilho = 1;
     this.qualidade = 1;
@@ -115,12 +133,34 @@ export class Cena {
     if (this.w) this.redimensionar(this.w, this.h, this.dpr);
   }
 
+  /** Limpa a camada de interface para o quadro. */
+  limparHud() {
+    if (!this.hudCtx) return null;
+    this.hudCtx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.hudCtx.clearRect(0, 0, this.w, this.h);
+    return this.hudCtx;
+  }
+
   redimensionar(w, h, dpr) {
     this.w = w; this.h = h; this.dpr = dpr;
     this.canvas.width = Math.round(w * dpr);
     this.canvas.height = Math.round(h * dpr);
-    this.canvas.style.width = w + 'px';
-    this.canvas.style.height = h + 'px';
+    this.saida.style.width = w + 'px';
+    this.saida.style.height = h + 'px';
+    if (this.canvas !== this.saida) {
+      this.canvas.style.width = w + 'px';
+      this.canvas.style.height = h + 'px';
+    }
+    if (this.pos.ok) {
+      this.pos.redimensionar(Math.round(w * dpr), Math.round(h * dpr),
+        this.qualidade > 0.67 ? 1 : 0.7);
+    }
+    if (this.hudCanvas) {
+      this.hudCanvas.width = Math.round(w * dpr);
+      this.hudCanvas.height = Math.round(h * dpr);
+      this.hudCanvas.style.width = w + 'px';
+      this.hudCanvas.style.height = h + 'px';
+    }
     this.escalaLuz = this.qualidade > 0.67 ? 0.5 : 0.38;
     this.luz.width = Math.max(2, Math.round(w * this.escalaLuz));
     this.luz.height = Math.max(2, Math.round(h * this.escalaLuz));
@@ -135,6 +175,7 @@ export class Cena {
   // =========================================================================
   prepararFase(mundo, fase) {
     this.fase = fase;
+    this.boneco.reiniciar();
     this.pal = PALETA[fase.hora] || PALETA.amanhecer;
     this.assarTerreno(mundo, fase);
     this.gerarTufos(mundo, fase);
@@ -346,6 +387,7 @@ export class Cena {
   desenhar(mundo, cam, dt, opcoes) {
     const ctx = this.ctx;
     this.t += dt;
+    this.boneco.atualizar(dt, mundo.bolota, mundo);
     if (!this.camadas) this.assarCamadas();
     const p = this.pal;
     const C = this.camadas;
@@ -370,6 +412,10 @@ export class Cena {
     ctx.save();
     cam.aplicar(ctx, this.w, this.h);
 
+    // o riacho vai ANTES do terreno: o barranco assado o recorta sozinho, e é
+    // por isso que ele só aparece nas frestas entre as pedras
+    if (this.fase.agua) this.desenharAgua(ctx, cam);
+
     // terreno assado
     ctx.drawImage(this.terreno, -this.terrenoOff, -this.terrenoOff);
 
@@ -382,7 +428,7 @@ export class Cena {
 
     if (opcoes.mira && !mundo.venceu) this.desenharMira(ctx, mundo, opcoes);
 
-    desenharBolota(ctx, mundo.bolota, this.pal, this.t, mundo);
+    this.boneco.desenhar(ctx, mundo.bolota, this.pal, mundo);
 
     // partículas e o que mais o jogo quiser, ainda em coordenadas de mundo
     if (opcoes.extra) opcoes.extra(ctx);
@@ -404,7 +450,132 @@ export class Cena {
     ctx.restore();
     }
 
-    this.acabamento(ctx);
+    if (this.pos.ok) {
+      const q = this.qualidade;
+      const feito = this.pos.render(this.canvas, {
+        tempo: this.t,
+        bloom: q > 0.1 ? this.brilho : 0,
+        forcaBloom: 0.55,
+        limiar: 0.78,
+        exposicao: 0.90,
+        contraste: 1.16,
+        vinheta: 0.45,
+        grao: q > 0.34 ? 0.028 : 0,
+        aberracao: q > 0.34 ? 0.006 : 0,
+        saturacao: 1.10,
+        sombraCor: [0.84, 0.93, 1.13],
+        luzCor: [1.12, 1.02, 0.86],
+      });
+      if (!feito) this.acabamento(ctx);   // WebGL caiu: volta para o 2D
+    } else {
+      this.acabamento(ctx);
+    }
+  }
+
+  /**
+   * O riacho. Três camadas: fundo escuro, um reflexo do céu que vem de cima, e
+   * a superfície — faixas claras que deslizam em velocidades diferentes. É a
+   * diferença de velocidade entre as faixas que o olho lê como água correndo;
+   * uma faixa só, por mais bonita, parece um piso de vidro.
+   */
+  desenharAgua(ctx, cam) {
+    const a = this.fase.agua;
+    const p = this.pal;
+    const x0 = cam.ox - this.w / (2 * cam.zoom) - 60;
+    const larg = this.w / cam.zoom + 120;
+    const fundo = this.fase.altura + 200;
+
+    const g = ctx.createLinearGradient(0, a.y - 30, 0, fundo);
+    g.addColorStop(0, comAlfa(p.ceuHorizonte, 0.55));
+    g.addColorStop(0.10, a.cor);
+    g.addColorStop(1, a.fundo);
+    ctx.fillStyle = g;
+    ctx.fillRect(x0, a.y, larg, fundo - a.y);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x0, a.y - 26, larg, fundo - a.y + 26);
+    ctx.clip();
+
+    // ondulação da superfície
+    for (let k = 0; k < 3; k++) {
+      const vel = 26 + k * 34;
+      const amp = 3.2 - k * 0.7;
+      const yy = a.y + k * 5;
+      ctx.beginPath();
+      ctx.moveTo(x0, fundo);
+      for (let x = x0; x <= x0 + larg; x += 12) {
+        const o = Math.sin((x + this.t * vel) * 0.021 + k * 2.1) * amp
+          + Math.sin((x - this.t * vel * 0.6) * 0.009 + k) * amp * 0.8;
+        ctx.lineTo(x, yy + o);
+      }
+      ctx.lineTo(x0 + larg, fundo);
+      ctx.closePath();
+      ctx.fillStyle = comAlfa(k === 0 ? p.ceuHorizonte : a.cor, k === 0 ? 0.30 : 0.22);
+      ctx.fill();
+    }
+
+    // brilhos que correm na superfície
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 26; i++) {
+      const bx = x0 + ((i * 137.7 + this.t * 42) % larg);
+      const by = a.y + 4 + ((i * 53) % 26);
+      const w = 12 + ((i * 31) % 26);
+      const al = 0.10 + Math.abs(Math.sin(this.t * 1.3 + i)) * 0.16;
+      ctx.fillStyle = comAlfa(p.luzBorda, al);
+      ctx.fillRect(bx, by, w, 1.6);
+    }
+    ctx.restore();
+
+    // linha de superfície, mais clara do lado do sol
+    ctx.strokeStyle = comAlfa(p.luzBorda, 0.5);
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (let x = x0; x <= x0 + larg; x += 10) {
+      const o = Math.sin((x + this.t * 26) * 0.021) * 3.2;
+      if (x === x0) ctx.moveTo(x, a.y + o); else ctx.lineTo(x, a.y + o);
+    }
+    ctx.stroke();
+  }
+
+  /**
+   * Poeira de pólen em suspensão. Vive em coordenadas de mundo e dá a volta em
+   * torno da câmera, então nunca acaba e nunca aparece do nada. Vai na tela de
+   * luz para que o bloom a pegue: é o que faz o ar parecer ter matéria.
+   */
+  desenharPoeira(g, cam) {
+    const lw = this.w / cam.zoom, lh = this.h / cam.zoom;
+    const ox = cam.ox - lw / 2, oy = cam.oy - lh / 2;
+    if (!this.poeira) {
+      this.poeira = [];
+      for (let i = 0; i < 70; i++) {
+        this.poeira.push({
+          x: ox + Math.random() * lw, y: oy + Math.random() * lh,
+          r: 0.7 + Math.random() * 1.8,
+          v: 5 + Math.random() * 16,
+          f: Math.random() * TAU,
+        });
+      }
+    }
+    for (const d of this.poeira) {
+      // sobe devagar; quando sai de vista, reaparece do outro lado. Como as
+      // posições são de MUNDO, a poeira fica para trás quando a câmera anda —
+      // se fossem de tela, os pontinhos pareceriam colados no monitor.
+      d.y -= d.v * (1 / 60);
+      if (d.y < oy - 20) { d.y = oy + lh + 10; d.x = ox + Math.random() * lw; }
+      if (d.x < ox - 30) d.x += lw + 60;
+      else if (d.x > ox + lw + 30) d.x -= lw + 60;
+      const wx = d.x + Math.sin(this.t * 0.5 + d.f) * 12;
+      const s = cam.paraTela(wx, d.y, this.w, this.h);
+      if (s.x < -8 || s.y < -8 || s.x > this.w + 8 || s.y > this.h + 8) continue;
+      // mais discreta no céu, mais viva perto do chão e dentro dos raios
+      const fundo = clamp(s.y / this.h, 0, 1);
+      const al = (0.05 + fundo * 0.16) * (0.55 + Math.abs(Math.sin(this.t * 1.6 + d.f)) * 0.65);
+      g.fillStyle = comAlfa(this.pal.luzBorda, al);
+      g.beginPath();
+      g.arc(s.x, s.y, d.r, 0, TAU);
+      g.fill();
+    }
   }
 
   desenharTufos(ctx, cam, mundo) {
@@ -659,6 +830,8 @@ export class Cena {
         brilhar(br.x, br.y, 130 * cam.zoom * (1 - br.t / 1.4), '#c8ff9a', 0.4 * (1 - br.t / 1.4));
       }
     }
+    if (this.qualidade > 0.34) this.desenharPoeira(g, cam);
+
     if (mundo.venceu) {
       // Forte o bastante para ser uma comemoração, fraco o bastante para ainda
       // se ver a flor e a Bolota: a primeira versão estourava a tela inteira em
@@ -672,6 +845,15 @@ export class Cena {
   aplicarBloom(ctx) {
     const forca = this.brilho;
     const g = this.luzCtx;
+    if (this.pos.ok) {
+      // O halo vem do shader, a partir do brilho real da imagem: borrar aqui
+      // seria pagar duas vezes por um resultado pior.
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(this.luz, 0, 0, this.w, this.h);
+      ctx.restore();
+      return;
+    }
     if (forca > 0.02) {
       const b = this.borrCtx;
       b.setTransform(1, 0, 0, 1, 0, 0);

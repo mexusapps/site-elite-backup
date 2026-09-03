@@ -24,8 +24,10 @@ const MODO = { MENU: 'menu', JOGO: 'jogo', PAUSA: 'pausa', FIM: 'fim' };
 class App {
   constructor() {
     this.canvas = document.getElementById('jogo');
+    this.canvasHud = document.getElementById('hud');
     this.uiRoot = document.getElementById('ui');
-    this.cena = new Cena(this.canvas);
+    this.cena = new Cena(this.canvas, this.canvasHud,
+      { forcar: /[?&]glsempre/.test(location.search) });
     this.cam = new Camera();
     this.hud = new Hud();
     this.audio = audio;
@@ -523,7 +525,6 @@ class App {
 
   // =========================================================================
   desenhar(dt) {
-    const ctx = this.cena.ctx;
     const mostrarMira = this.opcoes.mira === 'sempre' || this.modo === MODO.JOGO;
     this.cena.desenhar(this.mundo, this.cam, dt, {
       mira: mostrarMira && this.modo !== MODO.MENU,
@@ -533,12 +534,18 @@ class App {
       },
     });
 
-    if (this.modo === MODO.JOGO || this.modo === MODO.FIM) {
-      this.hud.desenhar(ctx, this.progresso(), this.cena.w, this.cena.h, dt, this.opcoes);
-    }
-    if (this.modo === MODO.PAUSA || this.modo === MODO.MENU) {
-      ctx.fillStyle = 'rgba(10,18,16,0.45)';
-      ctx.fillRect(0, 0, this.cena.w, this.cena.h);
+    // A interface é desenhada numa camada própria, por cima do acabamento: se
+    // ela passasse pelo bloom e pela gradação, o texto ficaria lavado e o
+    // grão apareceria em cima da tipografia.
+    const hud = this.cena.limparHud();
+    if (hud) {
+      if (this.modo === MODO.JOGO || this.modo === MODO.FIM) {
+        this.hud.desenhar(hud, this.progresso(), this.cena.w, this.cena.h, dt, this.opcoes);
+      }
+      if (this.modo === MODO.PAUSA || this.modo === MODO.MENU) {
+        hud.fillStyle = 'rgba(10,18,16,0.45)';
+        hud.fillRect(0, 0, this.cena.w, this.cena.h);
+      }
     }
     this.audio.tick(dt, this.modo === MODO.MENU ? 0.25 : this.intensidade());
   }
@@ -596,6 +603,10 @@ function iniciar() {
     alvos() { return app.hud.alvos.map((a) => ({ ...a })); },
     camera() { return { x: app.cam.x, y: app.cam.y, zoom: app.cam.zoom }; },
     qualidade(q) { if (q !== undefined) app.cena.definirQualidade(q); return app.cena.qualidade; },
+    posfx() {
+      const p = app.cena.pos;
+      return { ok: p.ok, motivo: p.motivo, placa: p.placa || '' };
+    },
     /** Segura, mira e solta como um humano — só que com a carga exata. */
     saltar(angulo, carga, maxQuadros = 700) {
       const quadros = Math.max(1, Math.round(carga * BOLOTA.cargaMax * 60) + 1);

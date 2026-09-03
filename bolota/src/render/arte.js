@@ -131,6 +131,32 @@ export function mancha(ctx, x, y, r, semente, achatar = 1, ondas = 0.2) {
   ctx.closePath();
 }
 
+/**
+ * Moita: uma mancha com a borda em LOBOS, e não lisa.
+ *
+ * A copa das árvores era feita de manchas macias, e de longe a mata inteira
+ * virava um monte de bolhas verdes. Uma folhagem de verdade tem a silhueta
+ * recortada: são os tufos de folhas que criam saliências e reentrâncias. Cada
+ * lobo aqui é um arco quadrático que sai para fora e volta — mesmo custo de
+ * desenho, silhueta completamente diferente.
+ */
+export function moita(ctx, x, y, r, semente, achatar = 1, lobos = 11) {
+  const raioEm = (a) => r * (0.84 + 0.22 * Math.abs(Math.sin(a * 2.7 + semente)));
+  ctx.beginPath();
+  for (let i = 0; i < lobos; i++) {
+    const a0 = (TAU * i) / lobos;
+    const a1 = (TAU * (i + 1)) / lobos;
+    const am = (a0 + a1) / 2;
+    const r0 = raioEm(a0), r1 = raioEm(a1);
+    const rm = r * (1.10 + 0.30 * Math.abs(Math.sin(am * 1.9 + semente * 1.3)));
+    if (i === 0) ctx.moveTo(x + Math.cos(a0) * r0, y + Math.sin(a0) * r0 * achatar);
+    ctx.quadraticCurveTo(
+      x + Math.cos(am) * rm, y + Math.sin(am) * rm * achatar,
+      x + Math.cos(a1) * r1, y + Math.sin(a1) * r1 * achatar);
+  }
+  ctx.closePath();
+}
+
 /** Grão fino por cima de uma área — tira o aspecto de plástico. */
 export function grao(ctx, x, y, w, h, forca = 0.05, passo = 3) {
   ctx.save();
@@ -448,7 +474,7 @@ export function arvore(ctx, x, base, alt, escala, semente, pal, nevoa = 0) {
     const luzT = clamp(1 - (cy - topo) / (alt * 0.45), 0, 1);
     const c1 = mistura(pal.folhaEscura, pal.folhaClara, luzT * 0.85);
     ctx.fillStyle = cor(c1);
-    mancha(ctx, cx, cy, r, i + semente, 0.82, 0.26);
+    moita(ctx, cx, cy, r, i + semente, 0.84, 9 + (i % 4));
     ctx.fill();
   }
   // luz direta nas manchas de cima
@@ -457,7 +483,7 @@ export function arvore(ctx, x, base, alt, escala, semente, pal, nevoa = 0) {
     if (luzT < 0.45) continue;
     ctx.globalAlpha = (luzT - 0.45) * 1.1;
     ctx.fillStyle = cor(pal.folhaLuz);
-    mancha(ctx, cx - r * 0.16, cy - r * 0.22, r * 0.62, i * 1.7 + semente, 0.8, 0.3);
+    moita(ctx, cx - r * 0.16, cy - r * 0.22, r * 0.60, i * 1.7 + semente, 0.8, 8);
     ctx.fill();
   }
   ctx.globalAlpha = 1;

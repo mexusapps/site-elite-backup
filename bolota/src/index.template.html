@@ -23,6 +23,7 @@
     touch-action:none;user-select:none;
   }
   #jogo{position:fixed;inset:0;display:block;background:var(--fundo);cursor:crosshair}
+  #hud{position:fixed;inset:0;display:block;pointer-events:none;z-index:5}
 
   #ui{
     position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
@@ -154,5 +155,6 @@
 </style>
 
 <canvas id="jogo" tabindex="0" aria-label="BOLOTA — jogo de saltos numa clareira"></canvas>
+<canvas id="hud" aria-hidden="true"></canvas>
 <div id="ui" hidden></div>
 <script>__SCRIPT__</script>

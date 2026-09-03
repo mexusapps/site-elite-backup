@@ -31,8 +31,8 @@ const ok = (n, c, d) => {
 };
 const t0 = Date.now();
 
-console.log('\n0 e 1 · física, regras e projeto da fase (sem navegador)');
-for (const arq of ['fisica.test.mjs', 'jogo.test.mjs']) {
+console.log('\n0, 1 e 1b · física, regras, projeto da fase e esqueleto (sem navegador)');
+for (const arq of ['fisica.test.mjs', 'jogo.test.mjs', 'rig.test.mjs']) {
   try {
     const saida = execFileSync(process.execPath, [resolve(aqui, arq)], { encoding: 'utf8' });
     const m = saida.match(/(\d+) passaram · (\d+) falharam/);
@@ -61,11 +61,15 @@ try {
       modo: window.__BOLOTA__.modo,
       tela: window.__BOLOTA__.tela(),
       total: window.__BOLOTA__.totalFases,
-      canvas: !!document.getElementById('jogo').getContext('2d'),
+      canvas: !!window.__app.cena.ctx && document.getElementById('jogo').width > 0,
+      hud: !!window.__app.cena.hudCtx,
+      posfx: window.__BOLOTA__.posfx(),
       fundo: getComputedStyle(document.body).backgroundColor,
       tamanho: [document.getElementById('jogo').width, document.getElementById('jogo').height],
     }));
     ok('API exposta e canvas disponível', i.pronto && i.canvas);
+    ok('a camada de interface existe e é própria', i.hud);
+    console.log(`      pós-processamento: ${i.posfx.ok ? 'WebGL' : '2D (' + i.posfx.motivo + ')'}`);
     ok('abre no menu', i.modo === 'menu' && i.tela === 'titulo', `${i.modo}/${i.tela}`);
     ok('o canvas tem tamanho real', i.tamanho[0] > 600 && i.tamanho[1] > 400, i.tamanho.join('x'));
     ok('a página pinta o próprio fundo', i.fundo !== 'rgba(0, 0, 0, 0)', i.fundo);
@@ -81,6 +85,49 @@ try {
       idle.e.noChao && idle.e.venceu === false && idle.e.quedas === 0,
       JSON.stringify({ chao: idle.e.noChao, quedas: idle.e.quedas }));
     ok('e a fase não se resolve sozinha', idle.e.orvalho === 0 && idle.e.brotos === 0);
+  }
+
+  // =========================================================================
+  console.log('\n2b · o caminho WebGL de acabamento');
+  {
+    // Nesta máquina não há GPU, então o jogo escolhe sozinho o caminho 2D. Para
+    // que o shader não fique sem teste nenhum, abrimos uma segunda página com
+    // ?glsempre=1, que força o WebGL mesmo em rasterização por software.
+    const gl = await abrir({ width: 900, height: 600, query: '?glsempre=1' });
+    try {
+      const r = await gl.page.evaluate(() => {
+        const B = window.__BOLOTA__;
+        B.modoTeste(true); B.opcoes.master = 0;
+        B.abrir(0); B.passo(70);
+        const cena = window.__app.cena;
+        for (let i = 0; i < 4; i++) cena.desenhar(window.__app.mundo, window.__app.cam, 1 / 60, { mira: true });
+        const g = cena.pos.gl;
+        const px = new Uint8Array(4 * 64 * 64);
+        g.bindFramebuffer(g.FRAMEBUFFER, null);
+        g.readPixels(120, 120, 64, 64, g.RGBA, g.UNSIGNED_BYTE, px);
+        let soma = 0, min = 255, max = 0;
+        for (let i = 0; i < px.length; i += 4) {
+          const v = (px[i] + px[i + 1] + px[i + 2]) / 3;
+          soma += v; if (v < min) min = v; if (v > max) max = v;
+        }
+        return {
+          ok: cena.pos.ok,
+          media: soma / (px.length / 4),
+          min, max,
+          erroGL: g.getError(),
+          separado: cena.canvas !== cena.saida,
+          erros: B.erros,
+        };
+      });
+      ok('o pós-processamento em WebGL liga quando forçado', r.ok && r.separado);
+      ok('e desenha um quadro de verdade, não uma tela preta',
+        r.media > 25 && r.max - r.min > 20, JSON.stringify({ media: r.media | 0, min: r.min, max: r.max }));
+      ok('sem erro de OpenGL nem exceção', r.erroGL === 0 && r.erros.length === 0,
+        `gl=${r.erroGL} ${r.erros.join(' | ')}`);
+      ok('nenhum erro de console no caminho WebGL', gl.logs.length === 0, gl.logs.slice(0, 2).join(' | '));
+    } finally {
+      await gl.browser.close();
+    }
   }
 
   // =========================================================================

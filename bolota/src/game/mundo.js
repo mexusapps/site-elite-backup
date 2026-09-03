@@ -182,7 +182,10 @@ export class Mundo {
 
   verificarQueda() {
     const c = this.bolota.corpo;
-    if (c.y < this.fase.altura + 220) return;
+    // Onde existe riacho, cair é encostar na água — e não sumir por baixo do
+    // mapa. O jogador vê onde errou, que é metade do aprendizado.
+    const limite = this.fase.agua ? this.fase.agua.y + 26 : this.fase.altura + 220;
+    if (c.y < limite) return;
     this.quedas++;
     this.quedaDe = { x: c.x, y: c.y };
     this.respawn = MUNDO.respawnSuave;

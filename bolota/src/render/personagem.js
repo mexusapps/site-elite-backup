@@ -1,28 +1,26 @@
 // ---------------------------------------------------------------------------
-// personagem.js — a Bolota, pintada.
+// personagem.js — a Bolota, pintada sobre o esqueleto do rig.js.
 //
-// Tudo aqui é desenho: nenhuma regra, nenhum estado. A função recebe o
-// personagem já simulado e o transforma em tinta. As decisões de arte:
+// Aqui não há regra nem estado: entra uma pose, sai tinta. As decisões de arte:
 //
-//   • A CASCA é pintada em camadas, como uma ilustração: base em degradê,
-//     veios de madeira em ruído, sombra fria embaixo à esquerda, luz quente de
-//     borda em cima à direita e um brilho especular pequeno e duro. É essa
-//     pilha (e não um gradiente só) que tira o cheiro de "círculo de canvas".
-//   • O CHAPÉU da bolota tem escamas de verdade, desenhadas uma a uma em duas
-//     fileiras, com a aba projetando sombra na casca.
-//   • O BROTO é a correntinha de Verlet do modelo, desenhada como um caule que
-//     afina até a ponta e termina numa folha que gira conforme o chicote.
-//   • O ROSTO é pequeno e fica alto: olho grande, íris com dois tons, reflexo
-//     que não acompanha o olhar (fica preso à fonte de luz) e uma boca que
-//     muda com o estado. A sobrancelha faz quase todo o trabalho de expressão.
-//   • O desenho inteiro vive dentro do esmagamento (sx, sy) e da inclinação do
-//     modelo, então a animação procedural aparece de graça em cada camada.
+//   • MEMBROS EM DUAS CAMADAS. Cada braço e cada perna é desenhado primeiro
+//     como um traço escuro mais grosso e depois como um traço claro por dentro:
+//     é o contorno que separa o membro do corpo em qualquer fundo. Os membros
+//     do lado de trás saem dessaturados e mais escuros — profundidade sem
+//     precisar de sombra.
+//   • A CABEÇA É A BOLOTA. Casca pintada em camadas (base, barriga, veios,
+//     sombra fria, oclusão do chapéu, luz de borda quente, especular duro) e um
+//     chapéu com escamas desenhadas uma a uma.
+//   • O ROSTO é pequeno e alto, com a íris em dois tons e um reflexo preso à
+//     fonte de luz, que não acompanha o olhar. A sobrancelha faz quase toda a
+//     expressão; a boca só confirma.
+//   • O BROTO é a correntinha de Verlet do modelo, virando caule que afina até
+//     a ponta e termina numa folha que gira conforme o chicote.
 // ---------------------------------------------------------------------------
 
 import { TAU, clamp, lerp, easeOutCubic } from '../core/math.js';
 import { fbm, comAlfa, mistura } from './arte.js';
-
-const R = 19; // raio nominal — o mesmo de BOLOTA.raio
+import { Rig, CORPO } from './rig.js';
 
 export const CORES = {
   cascaEscura: '#7d4a22',
@@ -35,6 +33,14 @@ export const CORES = {
   chapeuClaro: '#95602f',
   chapeuEscuro: '#3f2413',
   chapeuBorda: '#c08a4a',
+  corpo: '#e4bc86',
+  corpoClaro: '#fbe6c0',
+  corpoEscuro: '#b0824c',
+  membro: '#a0693a',
+  membroClaro: '#c9905a',
+  membroEscuro: '#4b2b13',
+  extremidade: '#c9945c',
+  extremidadeClara: '#f2cf9d',
   caule: '#54823c',
   cauleClaro: '#7cb455',
   folha: '#68ad46',
@@ -47,7 +53,10 @@ export const CORES = {
   boca: '#5a2f1c',
   lingua: '#e08b7a',
   blush: '#f0947c',
+  sombra: '#3a2a3e',
 };
+
+const R = CORPO.raio;
 
 // --- utilitários locais ------------------------------------------------------
 
@@ -68,27 +77,144 @@ function caminhoNoz(ctx, r) {
   ctx.closePath();
 }
 
-/** Onde está o chão logo abaixo de (x, y)? Devolve Infinity se não houver. */
-function chaoAbaixo(formas, x, y) {
-  let melhor = Infinity;
-  for (const f of formas) {
-    const a = f.aabb;
-    if (x < a.x - 2 || x > a.x + a.w + 2) continue;
-    const n = f.p.length;
-    for (let i = 0; i < n; i++) {
-      const p = f.p[i], q = f.p[(i + 1) % n];
-      if ((p[0] - x) * (q[0] - x) > 0) continue;
-      const dx = q[0] - p[0];
-      if (Math.abs(dx) < 1e-6) continue;
-      const t = (x - p[0]) / dx;
-      const sy = p[1] + (q[1] - p[1]) * t;
-      if (sy >= y - 4 && sy < melhor) melhor = sy;
-    }
+/**
+ * Um membro: dois ossos, traço que afina da raiz para a ponta, contorno escuro
+ * por baixo e um fio de luz por cima. Desenhar em três passadas custa quase
+ * nada e é a diferença entre "linha" e "braço".
+ */
+function membro(ctx, ax, ay, bx, by, cx, cy, esp, cor, corLuz, corEscura, fundo) {
+  const w = esp * (fundo ? 0.92 : 1);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  ctx.strokeStyle = corEscura;
+  ctx.lineWidth = w + 2.2;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay); ctx.quadraticCurveTo(bx, by, cx, cy);
+  ctx.stroke();
+
+  // dois ossos com espessuras diferentes: o braço afina do ombro para o pulso,
+  // e é esse afinamento que tira o aspecto de salsicha de espessura única
+  const g = ctx.createLinearGradient(ax, ay, cx, cy);
+  g.addColorStop(0, cor);
+  g.addColorStop(1, corLuz);
+  ctx.strokeStyle = g;
+  ctx.lineWidth = w;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+  ctx.stroke();
+  ctx.lineWidth = w * 0.74;
+  ctx.beginPath();
+  ctx.moveTo(bx, by); ctx.lineTo(cx, cy);
+  ctx.stroke();
+
+  if (!fundo) {
+    ctx.strokeStyle = comAlfa('#ffffff', 0.16);
+    ctx.lineWidth = Math.max(1, w * 0.3);
+    ctx.beginPath();
+    ctx.moveTo(ax, ay - w * 0.24); ctx.lineTo(bx, by - w * 0.24);
+    ctx.stroke();
   }
-  return melhor;
 }
 
-// --- peças -------------------------------------------------------------------
+/** Mão: uma folhinha de três lóbulos. */
+function mao(ctx, x, y, ang, esc, fundo) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  ctx.scale(esc, esc);
+  ctx.beginPath();
+  ctx.moveTo(-3.4, 0);
+  ctx.bezierCurveTo(-3.6, -4.6, 3.2, -5.2, 4.4, -1.4);
+  ctx.bezierCurveTo(5.6, 1.4, 1.8, 4.8, -1.2, 4.0);
+  ctx.bezierCurveTo(-2.8, 3.6, -3.4, 2.0, -3.4, 0);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(-4, -5, 5, 5);
+  g.addColorStop(0, fundo ? CORES.membroClaro : CORES.extremidadeClara);
+  g.addColorStop(1, fundo ? CORES.membro : CORES.extremidade);
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.strokeStyle = comAlfa(CORES.membroEscuro, 0.85);
+  ctx.lineWidth = 1.1;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Pé: uma raizinha achatada, com dois dedos. */
+function pe(ctx, x, y, ang, dir, fundo) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang * 0.5);
+  ctx.beginPath();
+  ctx.moveTo(-4.2 * dir, -2.6);
+  ctx.bezierCurveTo(2 * dir, -4.4, 8.4 * dir, -2.2, 8.6 * dir, 1.2);
+  ctx.bezierCurveTo(8.8 * dir, 3.4, 2 * dir, 4.0, -4.0 * dir, 3.2);
+  ctx.bezierCurveTo(-6.2 * dir, 2.6, -6.2 * dir, -1.4, -4.2 * dir, -2.6);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, -4, 0, 4);
+  g.addColorStop(0, fundo ? CORES.membroClaro : CORES.extremidadeClara);
+  g.addColorStop(1, fundo ? CORES.membro : CORES.extremidade);
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.strokeStyle = comAlfa(CORES.membroEscuro, 0.9);
+  ctx.lineWidth = 1.1;
+  ctx.stroke();
+  if (!fundo) {
+    ctx.strokeStyle = comAlfa(CORES.membroEscuro, 0.5);
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(4.2 * dir, -2.2); ctx.lineTo(5.0 * dir, 2.6);
+    ctx.moveTo(1.0 * dir, -3.0); ctx.lineTo(1.4 * dir, 3.2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Tronco: uma bolota pequena e macia, com barriga clara e luz de borda. */
+function tronco(ctx, pose, pal) {
+  const qx = pose.quadril.x, qy = pose.quadril.y;
+  const px = pose.peito.x, py = pose.peito.y;
+  const cx = (qx + px) / 2, cy = (qy + py) / 2;
+  const alt = Math.max(8, Math.hypot(px - qx, py - qy) * 0.42 + 6.5);
+  const larg = lerp(10.2, 13, pose.novelo);
+  const ang = Math.atan2(py - qy, px - qx) + Math.PI / 2;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(ang);
+
+  elipse(ctx, 0, 0, larg, alt);
+  const g = ctx.createLinearGradient(-larg, -alt, larg * 0.8, alt);
+  g.addColorStop(0, CORES.corpoClaro);
+  g.addColorStop(0.5, CORES.corpo);
+  g.addColorStop(1, CORES.corpoEscuro);
+  ctx.fillStyle = g;
+  ctx.fill();
+
+  ctx.save();
+  elipse(ctx, 0, 0, larg, alt);
+  ctx.clip();
+  const gb = ctx.createRadialGradient(-larg * 0.15, alt * 0.30, 1, -larg * 0.15, alt * 0.2, larg * 1.5);
+  gb.addColorStop(0, comAlfa(CORES.barriga, 0.72));
+  gb.addColorStop(1, comAlfa(CORES.barriga, 0));
+  ctx.fillStyle = gb;
+  ctx.fillRect(-larg, -alt, larg * 2, alt * 2);
+  ctx.globalCompositeOperation = 'lighter';
+  const gl = ctx.createRadialGradient(larg * 0.6, -alt * 0.5, 1, larg * 0.5, -alt * 0.4, larg * 1.6);
+  gl.addColorStop(0, comAlfa(pal.luzBorda, 0.42));
+  gl.addColorStop(1, comAlfa(pal.luzQuente, 0));
+  ctx.fillStyle = gl;
+  ctx.fillRect(-larg, -alt, larg * 2, alt * 2);
+  ctx.restore();
+
+  elipse(ctx, 0, 0, larg, alt);
+  ctx.strokeStyle = comAlfa(CORES.membroEscuro, 0.55);
+  ctx.lineWidth = 1.3;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// --- peças do ambiente do personagem -----------------------------------------
 
 function desenharTrilha(ctx, b, pal) {
   const tr = b.trilha;
@@ -110,10 +236,9 @@ function desenharTrilha(ctx, b, pal) {
   ctx.restore();
 }
 
-function desenharSombra(ctx, b, mundo) {
-  const c = b.corpo;
-  const chao = mundo && mundo.formas ? chaoAbaixo(mundo.formas, c.x, c.y) : Infinity;
+function desenharSombra(ctx, b, mundo, chao) {
   if (!isFinite(chao)) return;
+  const c = b.corpo;
   const queda = chao - (c.y + R);
   if (queda > 300) return;
   const t = clamp(1 - queda / 300, 0, 1);
@@ -131,13 +256,13 @@ function desenharSombra(ctx, b, mundo) {
   ctx.restore();
 }
 
-/** O broto: correntinha de Verlet virando caule + folha. Mundo, não local. */
-function desenharBroto(ctx, b, pal, t) {
-  const br = b.broto;
+/** O broto: correntinha de Verlet virando caule + folha. Em coordenadas de mundo. */
+function desenharBroto(ctx, br, t, planando) {
+
   if (!br.iniciado) return;
   const n = br.n;
+  const esc = planando ? 1.9 : 1;
 
-  // caule afinando, desenhado como polígono (largura variável)
   const esq = [], dir = [];
   for (let i = 0; i < n; i++) {
     const px = br.px[i], py = br.py[i];
@@ -146,7 +271,7 @@ function desenharBroto(ctx, b, pal, t) {
     let dx = jx - px, dy = jy - py;
     const d = Math.hypot(dx, dy) || 1;
     dx /= d; dy /= d;
-    const w = lerp(3.6, 1.0, i / (n - 1));
+    const w = lerp(2.5, 0.8, i / (n - 1));
     esq.push([px - dy * w, py + dx * w]);
     dir.push([px + dy * w, py - dx * w]);
   }
@@ -161,7 +286,6 @@ function desenharBroto(ctx, b, pal, t) {
   ctx.fillStyle = gc;
   ctx.fill();
 
-  // fio de luz do lado do sol
   ctx.strokeStyle = comAlfa(CORES.cauleClaro, 0.75);
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -169,7 +293,6 @@ function desenharBroto(ctx, b, pal, t) {
   for (let i = 1; i < n; i++) ctx.lineTo(dir[i][0], dir[i][1]);
   ctx.stroke();
 
-  // folha na ponta: gira conforme o chicote da correntinha
   const ax = br.px[n - 1] - br.px[n - 2];
   const ay = br.py[n - 1] - br.py[n - 2];
   const ang = Math.atan2(ay, ax);
@@ -177,9 +300,10 @@ function desenharBroto(ctx, b, pal, t) {
   ctx.save();
   ctx.translate(br.px[n - 1], br.py[n - 1]);
   ctx.rotate(ang + balanco);
+  ctx.scale(esc, esc);
   for (const lado of [-1, 1]) {
-    const comp = lado < 0 ? 15 : 11.5;
-    const larg = lado < 0 ? 7.4 : 5.6;
+    const comp = lado < 0 ? 9 : 7;
+    const larg = lado < 0 ? 4.4 : 3.4;
     ctx.save();
     ctx.rotate(lado * 0.62);
     ctx.beginPath();
@@ -201,14 +325,10 @@ function desenharBroto(ctx, b, pal, t) {
     ctx.restore();
   }
   ctx.restore();
-  void pal;
 }
 
-/** Casca: base, veios, sombra fria, oclusão do chapéu, luz de borda quente. */
-function pintarCasca(ctx, b, pal) {
-  const r = R;
-
-  // base
+/** Casca da cabeça: base, veios, sombra fria, oclusão do chapéu, luz de borda. */
+function pintarCasca(ctx, r, pal) {
   caminhoNoz(ctx, r);
   const g = ctx.createLinearGradient(-r * 0.5, -r, r * 0.6, r * 1.1);
   g.addColorStop(0, CORES.cascaClara);
@@ -221,7 +341,6 @@ function pintarCasca(ctx, b, pal) {
   caminhoNoz(ctx, r);
   ctx.clip();
 
-  // barriga clara: a bolota é mais pálida na frente-baixo
   const gb = ctx.createRadialGradient(-r * 0.10, r * 0.30, r * 0.06, -r * 0.10, r * 0.30, r * 1.05);
   gb.addColorStop(0, comAlfa(CORES.barriga, 0.62));
   gb.addColorStop(0.55, comAlfa(CORES.barriga, 0.20));
@@ -229,7 +348,6 @@ function pintarCasca(ctx, b, pal) {
   ctx.fillStyle = gb;
   ctx.fillRect(-r * 1.2, -r * 1.2, r * 2.4, r * 2.6);
 
-  // veios de madeira: linhas curvas seguindo o eixo da noz
   ctx.strokeStyle = comAlfa(CORES.veio, 0.30);
   ctx.lineWidth = 0.9;
   for (let i = 0; i < 7; i++) {
@@ -245,7 +363,6 @@ function pintarCasca(ctx, b, pal) {
     ctx.stroke();
   }
 
-  // sombra fria: baixo-esquerda
   const gs = ctx.createRadialGradient(r * 0.42, -r * 0.30, r * 0.15, -r * 0.30, r * 0.55, r * 1.7);
   gs.addColorStop(0, 'rgba(40,32,58,0)');
   gs.addColorStop(0.62, 'rgba(40,32,58,0.16)');
@@ -253,14 +370,12 @@ function pintarCasca(ctx, b, pal) {
   ctx.fillStyle = gs;
   ctx.fillRect(-r * 1.2, -r * 1.2, r * 2.4, r * 2.6);
 
-  // oclusão sob a aba do chapéu
   const go = ctx.createLinearGradient(0, -r * 0.62, 0, -r * 0.06);
   go.addColorStop(0, 'rgba(48,26,12,0.55)');
   go.addColorStop(1, 'rgba(48,26,12,0)');
   ctx.fillStyle = go;
   ctx.fillRect(-r * 1.2, -r * 1.1, r * 2.4, r * 0.9);
 
-  // luz de borda quente: cima-direita
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   const gl = ctx.createRadialGradient(r * 0.60, -r * 0.62, r * 0.05, r * 0.55, -r * 0.55, r * 1.25);
@@ -270,10 +385,8 @@ function pintarCasca(ctx, b, pal) {
   ctx.fillStyle = gl;
   ctx.fillRect(-r * 1.2, -r * 1.2, r * 2.4, r * 2.6);
   ctx.restore();
-
   ctx.restore();
 
-  // fio de borda: escuro embaixo-esquerda, claro em cima-direita
   caminhoNoz(ctx, r);
   ctx.lineWidth = 1.5;
   const gc = ctx.createLinearGradient(-r, r, r, -r);
@@ -283,7 +396,6 @@ function pintarCasca(ctx, b, pal) {
   ctx.strokeStyle = gc;
   ctx.stroke();
 
-  // especular pequeno e duro
   ctx.save();
   caminhoNoz(ctx, r);
   ctx.clip();
@@ -298,10 +410,8 @@ function pintarCasca(ctx, b, pal) {
 }
 
 /** Chapéu (cúpula) com escamas em duas fileiras. */
-function pintarChapeu(ctx) {
-  const r = R;
+function pintarChapeu(ctx, r) {
   const topo = -r * 1.06, baixo = -r * 0.34, larg = r * 1.06;
-
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(-larg, baixo);
@@ -316,7 +426,6 @@ function pintarChapeu(ctx) {
 
   ctx.save();
   ctx.clip();
-  // escamas
   for (let fila = 0; fila < 2; fila++) {
     const y = baixo - (r * 0.20) - fila * r * 0.30;
     const n = fila === 0 ? 7 : 5;
@@ -332,7 +441,6 @@ function pintarChapeu(ctx) {
       ctx.fill();
     }
   }
-  // luz no alto-direita do chapéu
   ctx.globalCompositeOperation = 'lighter';
   const gl = ctx.createRadialGradient(larg * 0.42, topo * 0.86, r * 0.05, larg * 0.36, topo * 0.8, r * 1.0);
   gl.addColorStop(0, comAlfa(CORES.chapeuBorda, 0.55));
@@ -341,7 +449,6 @@ function pintarChapeu(ctx) {
   ctx.fillRect(-larg * 1.2, topo * 1.2, larg * 2.4, r * 1.6);
   ctx.restore();
 
-  // aba com volume
   ctx.beginPath();
   ctx.moveTo(-larg, baixo);
   ctx.quadraticCurveTo(0, baixo + r * 0.30, larg, baixo);
@@ -357,12 +464,11 @@ function pintarChapeu(ctx) {
 }
 
 /** Rosto: olhos com íris em dois tons, sobrancelhas e boca por estado. */
-function pintarRosto(ctx, b) {
-  const r = R;
+function pintarRosto(ctx, b, r, pose) {
   const olhoY = -r * 0.02;
   const olhoX = r * 0.40;
-  const ox = clamp(b.olharX, -1, 1) * r * 0.11;
-  const oy = clamp(b.olharY, -1, 1) * r * 0.09;
+  const ox = clamp(pose.olhoX, -1, 1) * r * 0.11;
+  const oy = clamp(pose.olhoY, -1, 1) * r * 0.09;
   const piscar = b.piscando > 0 ? clamp(b.piscando / 0.13, 0, 1) : 0;
   const abertura = 1 - easeOutCubic(Math.sin(piscar * Math.PI));
   const carga = b.carga || 0;
@@ -385,7 +491,6 @@ function pintarRosto(ctx, b) {
       continue;
     }
 
-    // branco do olho, com sombra suave em cima
     elipse(ctx, ex, olhoY, rx, ry);
     ctx.fillStyle = CORES.olhoBranco;
     ctx.fill();
@@ -398,7 +503,6 @@ function pintarRosto(ctx, b) {
     ctx.fillStyle = gs;
     ctx.fillRect(ex - rx, olhoY - ry, rx * 2, ry * 2);
 
-    // íris
     const ix = ex + ox, iy = olhoY + oy;
     const ir = Math.min(rx, ry) * 0.86;
     const gi = ctx.createRadialGradient(ix, iy - ir * 0.3, ir * 0.1, ix, iy, ir);
@@ -415,7 +519,6 @@ function pintarRosto(ctx, b) {
     ctx.fill();
     ctx.restore();
 
-    // reflexo: preso à luz, não ao olhar
     ctx.fillStyle = 'rgba(255,255,255,0.95)';
     ctx.beginPath();
     ctx.arc(ex + rx * 0.34, olhoY - ry * 0.38, ir * 0.30, 0, TAU);
@@ -425,13 +528,11 @@ function pintarRosto(ctx, b) {
     ctx.arc(ex - rx * 0.30, olhoY + ry * 0.34, ir * 0.15, 0, TAU);
     ctx.fill();
 
-    // contorno do olho
     elipse(ctx, ex, olhoY, rx, ry);
     ctx.strokeStyle = comAlfa('#4a2c18', 0.45);
     ctx.lineWidth = 0.9;
     ctx.stroke();
 
-    // sobrancelha: onde mora a expressão
     const alt = carregando ? -ry * (1.55 + carga * 0.30) : voando ? -ry * 2.05 : -ry * 1.75;
     const incl = carregando ? lado * 0.30 * (0.4 + carga) : voando ? -lado * 0.18 : lado * 0.06;
     ctx.strokeStyle = mistura(CORES.chapeuEscuro, CORES.cascaEscura, 0.4);
@@ -447,7 +548,6 @@ function pintarRosto(ctx, b) {
     ctx.restore();
   }
 
-  // bochechas
   ctx.save();
   ctx.globalAlpha = 0.30 + carga * 0.22;
   for (const lado of [-1, 1]) {
@@ -461,20 +561,17 @@ function pintarRosto(ctx, b) {
   }
   ctx.restore();
 
-  // boca
   const by = r * 0.42;
   ctx.strokeStyle = CORES.boca;
   ctx.lineWidth = 1.7;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   if (carregando) {
-    // boquinha apertada, concentrada
     const w = r * (0.16 - carga * 0.04);
     ctx.fillStyle = CORES.boca;
     elipse(ctx, 0, by, w, r * (0.10 + carga * 0.05));
     ctx.fill();
   } else if (voando) {
-    // "uhuuu": boca aberta arredondada com linguinha
     const h = r * 0.22;
     ctx.beginPath();
     ctx.moveTo(-r * 0.24, by - h * 0.35);
@@ -487,7 +584,6 @@ function pintarRosto(ctx, b) {
     elipse(ctx, 0, by + h * 0.52, r * 0.11, r * 0.07);
     ctx.fill();
   } else {
-    // sorrisinho tranquilo
     ctx.beginPath();
     ctx.moveTo(-r * 0.20, by - r * 0.02);
     ctx.quadraticCurveTo(0, by + r * 0.16, r * 0.20, by - r * 0.02);
@@ -495,7 +591,7 @@ function pintarRosto(ctx, b) {
   }
 }
 
-/** Anéis de tensão e faíscas enquanto carrega — leitura de força sem HUD. */
+/** Anéis de tensão e faíscas enquanto carrega. */
 function pintarCarga(ctx, b, pal, t) {
   const carga = b.carga;
   if (b.estado !== 'carregando' || carga <= 0.02) return;
@@ -512,7 +608,6 @@ function pintarCarga(ctx, b, pal, t) {
   ctx.arc(0, 0, R * (1.5 + carga * 1.5), 0, TAU);
   ctx.fill();
 
-  // anel que fecha conforme carrega
   const raio = lerp(R * 2.6, R * 1.32, easeOutCubic(carga));
   ctx.strokeStyle = comAlfa(carga > 0.94 ? '#fff3d0' : pal.luzBorda, 0.26 + carga * 0.44);
   ctx.lineWidth = 1.2 + carga * 1.6;
@@ -520,7 +615,6 @@ function pintarCarga(ctx, b, pal, t) {
   ctx.arc(0, 0, raio, -Math.PI / 2, -Math.PI / 2 + TAU * carga);
   ctx.stroke();
 
-  // faíscas puxadas para dentro
   const n = 7;
   for (let i = 0; i < n; i++) {
     const fase = (t * 1.5 + i / n) % 1;
@@ -535,53 +629,128 @@ function pintarCarga(ctx, b, pal, t) {
   ctx.restore();
 }
 
-// --- entrada -----------------------------------------------------------------
+// --- o personagem inteiro -----------------------------------------------------
 
-/**
- * Desenha a Bolota em coordenadas de mundo (a câmera já está aplicada).
- * @param {CanvasRenderingContext2D} ctx
- * @param {object} b     instância de Bolota já simulada
- * @param {object} pal   paleta da cena (usa luzQuente / luzBorda)
- * @param {number} t     tempo contínuo da cena, em segundos
- * @param {object} mundo para achar o chão da sombra de contato
- */
-export function desenharBolota(ctx, b, pal, t, mundo) {
-  if (!b) return;
-  const c = b.corpo;
-
-  desenharTrilha(ctx, b, pal);
-  desenharSombra(ctx, b, mundo);
-  pintarCarga(ctx, b, pal, t);
-  desenharBroto(ctx, b, pal, t);
-
-  ctx.save();
-  ctx.translate(c.x, c.y);
-  ctx.rotate(b.inclinacao);
-  ctx.scale(b.sx, b.sy);
-
-  pintarCasca(ctx, b, pal);
-  pintarChapeu(ctx);
-  // o rosto acompanha o olhar de leve, para dar volume à cabeça
-  ctx.save();
-  ctx.translate(clamp(b.olharX, -1, 1) * R * 0.06, clamp(b.olharY, -1, 1) * R * 0.05);
-  pintarRosto(ctx, b);
-  ctx.restore();
-
-  ctx.restore();
-
-  // clarão curto no pouso e no lançamento
-  const flash = Math.max(b.pousouAgora / 0.34, b.lancouAgora / 0.3);
-  if (flash > 0.01) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const r = R * (1.4 + (1 - flash) * 2.2);
-    const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
-    g.addColorStop(0, comAlfa(pal.luzBorda, 0.30 * flash));
-    g.addColorStop(1, comAlfa(pal.luzQuente, 0));
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(c.x, c.y, r, 0, TAU);
-    ctx.fill();
-    ctx.restore();
+export class Personagem {
+  constructor() {
+    this.rig = new Rig();
+    this.t = 0;
   }
+
+  reiniciar() { this.rig.reiniciar(); }
+
+  atualizar(dt, b, mundo) {
+    this.t += dt;
+    this.rig.atualizar(dt, b, mundo);
+  }
+
+  /** Desenha em coordenadas de mundo (a câmera já está aplicada). */
+  desenhar(ctx, b, pal, mundo) {
+    if (!b) return;
+    const c = b.corpo;
+    const p = this.rig.pose;
+    const t = this.t;
+
+    desenharTrilha(ctx, b, pal);
+    const chao = mundo && mundo.formas ? chaoDoCorpo(mundo, c) : Infinity;
+    desenharSombra(ctx, b, mundo, chao);
+    pintarCarga(ctx, b, pal, t);
+    desenharBroto(ctx, this.rig.broto, t, b.planando);
+
+    const dir = p.dir >= 0 ? 1 : -1;
+    const frente = dir >= 0 ? 1 : 0;     // membro do lado da câmera
+    const fundo = 1 - frente;
+    // Um braço que aponta para trás passa ATRÁS do corpo. Sem este teste, a
+    // mão da Bolota cruzava o rosto toda vez que ela armava o salto.
+    const bracoAtras = (k) => k === fundo || (p.mao[k].x - p.ombro[k].x) * dir < -1.5;
+
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(p.giroCorpo);
+    ctx.scale(p.escalaX, p.escalaY);
+
+    // --- membros de trás ------------------------------------------------------
+    const escuro = mistura(CORES.membroEscuro, CORES.sombra, 0.5);
+    const desenharBraco = (k, atras) => {
+      membro(ctx, p.ombro[k].x, p.ombro[k].y, p.cotovelo[k].x, p.cotovelo[k].y,
+        p.mao[k].x, p.mao[k].y, atras ? 3.9 : 4.2,
+        atras ? CORES.membroEscuro : CORES.membro,
+        atras ? CORES.membro : CORES.membroClaro,
+        atras ? escuro : CORES.membroEscuro, atras);
+      mao(ctx, p.mao[k].x, p.mao[k].y,
+        Math.atan2(p.mao[k].y - p.cotovelo[k].y, p.mao[k].x - p.cotovelo[k].x),
+        atras ? 1.15 : 1.28, atras);
+    };
+
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.translate(-dir * 2.2, 0);      // o lado de trás fica um tico atrás
+    membro(ctx, p.anca[fundo].x, p.anca[fundo].y, p.joelho[fundo].x, p.joelho[fundo].y,
+      p.pe[fundo].x, p.pe[fundo].y, 5.0,
+      CORES.membroEscuro, CORES.membro, escuro, true);
+    pe(ctx, p.pe[fundo].x, p.pe[fundo].y, p.giroPe[fundo], dir, true);
+    for (let k = 0; k < 2; k++) if (bracoAtras(k)) desenharBraco(k, true);
+    ctx.restore();
+
+    // --- tronco ---------------------------------------------------------------
+    tronco(ctx, p, pal);
+
+    // --- membros da frente ----------------------------------------------------
+    membro(ctx, p.anca[frente].x, p.anca[frente].y, p.joelho[frente].x, p.joelho[frente].y,
+      p.pe[frente].x, p.pe[frente].y, 5.4,
+      CORES.membro, CORES.membroClaro, CORES.membroEscuro, false);
+    pe(ctx, p.pe[frente].x, p.pe[frente].y, p.giroPe[frente], dir, false);
+
+    // --- cabeça ---------------------------------------------------------------
+    const rc = CORPO.cabecaR;
+    ctx.save();
+    ctx.translate(p.cabeca.x, p.cabeca.y);
+    ctx.rotate(p.giroCabeca + b.inclinacao * 0.25);
+    pintarCasca(ctx, rc, pal);
+    pintarChapeu(ctx, rc);
+    ctx.save();
+    ctx.translate(clamp(p.olhoX, -1, 1) * rc * 0.06, clamp(p.olhoY, -1, 1) * rc * 0.05);
+    pintarRosto(ctx, b, rc, p);
+    ctx.restore();
+    ctx.restore();
+
+    // braços que apontam para a frente ficam por cima de tudo
+    for (let k = 0; k < 2; k++) if (!bracoAtras(k)) desenharBraco(k, false);
+
+    ctx.restore();
+
+    const flash = Math.max(b.pousouAgora / 0.34, b.lancouAgora / 0.3);
+    if (flash > 0.01) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const r = R * (1.4 + (1 - flash) * 2.2);
+      const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
+      g.addColorStop(0, comAlfa(pal.luzBorda, 0.30 * flash));
+      g.addColorStop(1, comAlfa(pal.luzQuente, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, r, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+}
+
+function chaoDoCorpo(mundo, c) {
+  let melhor = Infinity;
+  for (const f of mundo.formas) {
+    const a = f.aabb;
+    if (c.x < a.x - 2 || c.x > a.x + a.w + 2) continue;
+    const n = f.p.length;
+    for (let i = 0; i < n; i++) {
+      const p = f.p[i], q = f.p[(i + 1) % n];
+      if ((p[0] - c.x) * (q[0] - c.x) > 0) continue;
+      const dx = q[0] - p[0];
+      if (Math.abs(dx) < 1e-6) continue;
+      const t = (c.x - p[0]) / dx;
+      const sy = p[1] + (q[1] - p[1]) * t;
+      if (sy >= c.y - 4 && sy < melhor) melhor = sy;
+    }
+  }
+  return melhor;
 }

@@ -7,7 +7,8 @@
   "scripts": {
     "build": "node build.mjs",
     "test": "node test/run.mjs",
-    "fisica": "node test/fisica.test.mjs"
+    "fisica": "node test/fisica.test.mjs",
+    "rig": "node test/rig.test.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

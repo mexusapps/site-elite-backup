@@ -14,7 +14,7 @@ const aqui = dirname(fileURLToPath(import.meta.url));
 export const PAGINA = 'file://' + resolve(aqui, '../dist/bolota.html');
 const CHROME = '/opt/pw-browsers/chromium';
 
-export async function abrir({ width = 1280, height = 800 } = {}) {
+export async function abrir({ width = 1280, height = 800, query = '' } = {}) {
   const browser = await chromium.launch({
     executablePath: CHROME,
     args: ['--no-sandbox', '--disable-dev-shm-usage', '--mute-audio',
@@ -26,7 +26,7 @@ export async function abrir({ width = 1280, height = 800 } = {}) {
     || /Failed to load resource/.test(t) || /AudioContext/.test(t);
   page.on('console', (m) => { if (m.type() === 'error' && !ignora(m.text())) logs.push(m.text()); });
   page.on('pageerror', (e) => logs.push('pageerror: ' + e.message));
-  await page.goto(PAGINA, { waitUntil: 'load' });
+  await page.goto(PAGINA + query, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__BOLOTA__ && window.__BOLOTA__.pronto, null, { timeout: 20000 });
   await page.evaluate(() => { window.__BOLOTA__.modoTeste(true); window.__BOLOTA__.opcoes.master = 0; });
   return { browser, page, logs };

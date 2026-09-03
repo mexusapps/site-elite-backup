@@ -5,8 +5,8 @@
 // camada de animação procedural em cima disso:
 //   • esmagamento e estiramento com mola (antecipação ao carregar, alongamento
 //     no voo, achatamento no pouso com volta em excesso);
-//   • o broto da cabeça é uma correntinha de Verlet — ele atrasa, chicoteia na
-//     virada e balança sozinho quando ela está parada;
+//   • o broto da cabeça é uma correntinha de Verlet — mas ela mora no rig, do
+//     lado do desenho, porque não muda uma regra sequer;
 //   • os olhos olham para onde ela vai mirar, e piscam de vez em quando.
 // Nada disso muda uma regra do jogo, e é tudo que faz o boneco ter alma.
 // ---------------------------------------------------------------------------
@@ -19,51 +19,9 @@ export const ESTADO = {
   PARADO: 'parado', CARREGANDO: 'carregando', VOANDO: 'voando', GRUDADO: 'grudado',
 };
 
-/** Correntinha de Verlet: o broto que sai da cabeça. */
-class Broto {
-  constructor(n, comp) {
-    this.n = n; this.comp = comp;
-    this.px = new Float32Array(n); this.py = new Float32Array(n);
-    this.ox = new Float32Array(n); this.oy = new Float32Array(n);
-    this.iniciado = false;
-  }
-  reposicionar(x, y) {
-    for (let i = 0; i < this.n; i++) {
-      this.px[i] = x; this.py[i] = y - i * this.comp;
-      this.ox[i] = this.px[i]; this.oy[i] = this.py[i];
-    }
-    this.iniciado = true;
-  }
-  passo(dt, baseX, baseY, ventoX, ventoY) {
-    if (!this.iniciado) this.reposicionar(baseX, baseY);
-    const amort = 0.86;
-    for (let i = 1; i < this.n; i++) {
-      const vx = (this.px[i] - this.ox[i]) * amort;
-      const vy = (this.py[i] - this.oy[i]) * amort;
-      this.ox[i] = this.px[i]; this.oy[i] = this.py[i];
-      this.px[i] += vx + ventoX * dt;
-      this.py[i] += vy + (900 + ventoY) * dt * dt * 60;
-    }
-    this.px[0] = baseX; this.py[0] = baseY;
-    this.ox[0] = baseX; this.oy[0] = baseY;
-    for (let k = 0; k < 6; k++) {
-      for (let i = 0; i < this.n - 1; i++) {
-        const dx = this.px[i + 1] - this.px[i], dy = this.py[i + 1] - this.py[i];
-        const d = Math.hypot(dx, dy) || 1e-6;
-        const dif = (d - this.comp) / d;
-        const mx = dx * dif * 0.5, my = dy * dif * 0.5;
-        if (i > 0) { this.px[i] += mx; this.py[i] += my; }
-        else { this.px[i + 1] -= mx * 2; this.py[i + 1] -= my * 2; continue; }
-        this.px[i + 1] -= mx; this.py[i + 1] -= my;
-      }
-    }
-  }
-}
-
 export class Bolota {
   constructor() {
     this.corpo = new Corpo(0, 0, BOLOTA.raio);
-    this.broto = new Broto(4, 13);
     this.habilidades = new Set(['salto']);
     this.reiniciar(0, 0);
   }
@@ -89,7 +47,6 @@ export class Bolota {
     this.planando = false;
     this.pousouAgora = 0;
     this.lancouAgora = 0;
-    this.broto.reposicionar(x, y - BOLOTA.raio);
     this.trilha = [];
   }
 
@@ -243,10 +200,6 @@ export class Bolota {
     const forcaOlhar = this.estado === ESTADO.CARREGANDO ? 1 : 0.55;
     this.olharX = damp(this.olharX, ox * forcaOlhar, 11, dt);
     this.olharY = damp(this.olharY, oy * forcaOlhar, 11, dt);
-
-    // o broto atrasa e chicoteia
-    const bx = c.x, by = c.y - BOLOTA.raio * this.sy * 0.72;
-    this.broto.passo(dt, bx, by, -c.vx * 0.016, -c.vy * 0.004);
 
     // rastro curto durante o voo, para leitura do arco
     if (this.estado === ESTADO.VOANDO && v > 260) {

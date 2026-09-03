@@ -28,6 +28,10 @@ export const FASE1 = {
   // vez que ela jogar esta fase — é o que faz repetir valer a pena.
   recompensa: 'planar',
 
+  // o riacho que corre no fundo da clareira: é ele que a Bolota atravessa nos
+  // primeiros saltos, e é nele que ela cai quando erra
+  agua: { y: 1312, cor: '#2f6f78', fundo: '#173f49' },
+
   // ----- terreno: [x, y, w, h] para blocos, ou lista de pontos para o resto ---
   terreno: [
     // barranco inicial
