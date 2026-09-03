@@ -20,6 +20,7 @@ import {
 } from './arte.js';
 import { Personagem } from './personagem.js';
 import { PosFX } from './posfx.js';
+import * as Arte from './imagens.js';
 
 export const PALETA = {
   amanhecer: {
@@ -263,9 +264,33 @@ export class Cena {
       return c;
     };
 
+    // Cada camada tem dois caminhos: se existe a ilustração, ela é usada; se
+    // não, o código pinta como antes. É isso que deixa a arte chegar aos poucos.
+    // Contrato de enquadramento das camadas ilustradas: a imagem ocupa toda a
+    // largura da camada (que é 1,6× a tela, para a parallaxe ter folga) e o
+    // alinhamento vertical é declarado aqui — não no arquivo. Assim o ilustrador
+    // não precisa acertar altura de tela nenhuma, e a mesma arte serve em
+    // qualquer proporção de janela.
+    const esticar = (canvas, nome, alinhar) => {
+      const im = Arte.img(nome);
+      if (!im) return false;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, w, h);
+      if (alinhar === 'moldura') {
+        // a moldura é esticada para a altura da tela: o miolo dela é vazio,
+        // então esticar não deforma nada que se veja
+        ctx.drawImage(im, 0, 0, w, h);
+        return true;
+      }
+      const alt = im.height * (w / im.width);
+      const f = alinhar === 'baixo' ? 1 : alinhar === 'meio' ? 0.5 : 0.35;
+      ctx.drawImage(im, 0, (h - alt) * f, w, alt);
+      return true;
+    };
+
     // céu
     const ceu = nova();
-    {
+    if (!esticar(ceu, 'ceu', 'topo')) {
       const g = ceu.getContext('2d');
       const gr = g.createLinearGradient(0, 0, 0, h);
       gr.addColorStop(0, p.ceuAlto);
@@ -306,7 +331,7 @@ export class Cena {
 
     // morros distantes
     const morros = nova();
-    {
+    if (!esticar(morros, 'morros', 'baixo')) {
       const g = morros.getContext('2d');
       const faixas = [
         { cor: p.morroLonge, base: h * 0.70, amp: h * 0.10, freq: 0.0016, nevoa: 0.62 },
@@ -330,7 +355,7 @@ export class Cena {
     // dava uma parede de brócolis — é a diferença entre as duas que o olho lê
     // como "tem floresta continuando lá atrás".
     const mata = nova();
-    {
+    if (!esticar(mata, 'mata_perto', 'baixo') && !esticar(mata, 'mata_longe', 'baixo')) {
       const g = mata.getContext('2d');
       const base = h * 0.88;
       for (let i = 0; i < 22; i++) {
@@ -361,7 +386,7 @@ export class Cena {
     // meio do cenário como borrões — moldura vira sujeira quando invade a área
     // de jogo. Agora o miolo fica sempre limpo.
     const frente = nova();
-    {
+    if (!esticar(frente, 'frente', 'moldura')) {
       const g = frente.getContext('2d');
       g.filter = 'blur(9px)';
       for (const [borda, sentido] of [[-22, 1], [h + 22, -1]]) {
@@ -378,7 +403,14 @@ export class Cena {
       g.filter = 'none';
     }
 
-    this.camadas = { ceu, morros, mata, frente, w, h };
+    // quando existem as duas faixas de mata ilustradas, a mais distante ganha
+    // uma camada própria, com parallaxe mais lenta
+    let mataLonge = null;
+    if (Arte.tem('mata_longe') && Arte.tem('mata_perto')) {
+      mataLonge = nova();
+      esticar(mataLonge, 'mata_longe', 'baixo');
+    }
+    this.camadas = { ceu, morros, mata, mataLonge, frente, w, h };
   }
 
   // =========================================================================
@@ -406,6 +438,7 @@ export class Cena {
     };
     desl(0.04, C.ceu);
     desl(0.12, C.morros);
+    if (C.mataLonge) desl(0.19, C.mataLonge);
     desl(0.26, C.mata);
 
     // --- mundo ----------------------------------------------------------------

@@ -12,6 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import { TAU, clamp, lerp } from '../core/math.js';
+import * as Img from './imagens.js';
 
 // --- ruído -------------------------------------------------------------------
 const PERM = new Uint8Array(512);
@@ -178,7 +179,76 @@ export function grao(ctx, x, y, w, h, forca = 0.05, passo = 3) {
 /**
  * Pinta uma forma de terreno em várias passadas. `luz` é o vetor do sol.
  */
+/**
+ * Terreno com textura ilustrada: a mesma pilha de luz, oclusão e borda da
+ * versão por código, só que a base deixa de ser gradiente e manchas e passa a
+ * ser um ladrilho pintado. A luz continua sendo aplicada aqui, e não assada na
+ * imagem — é o que mantém a textura utilizável em qualquer fase e hora do dia.
+ */
+function pintarTerrenoIlustrado(ctx, forma, pal, luz, semente) {
+  const p = forma.p, a = forma.aabb;
+  const padrao = Img.ladrilho(ctx, 'terra', 0.5);
+  ctx.save();
+  contornoVivo(ctx, p, 9, 0.02, semente);
+  ctx.clip();
+  ctx.fillStyle = padrao;
+  ctx.fillRect(a.x - 12, a.y - 12, a.w + 24, a.h + 24);
+
+  // luz direta do lado do sol
+  const lg = ctx.createLinearGradient(
+    a.x + a.w / 2 - luz.x * a.w, a.y + a.h / 2 - luz.y * a.h,
+    a.x + a.w / 2 + luz.x * a.w * 0.6, a.y + a.h / 2 + luz.y * a.h * 0.6);
+  lg.addColorStop(0, comAlfa(pal.luzQuente, 0.002));
+  lg.addColorStop(1, comAlfa(pal.luzQuente, 0.22));
+  ctx.fillStyle = lg;
+  ctx.fillRect(a.x - 12, a.y - 12, a.w + 24, a.h + 24);
+
+  const alt = Math.min(340, a.h);
+  const og = ctx.createLinearGradient(0, a.y + a.h - alt, 0, a.y + a.h);
+  og.addColorStop(0, 'rgba(12,18,30,0)');
+  og.addColorStop(1, 'rgba(9,14,26,0.62)');
+  ctx.fillStyle = og;
+  ctx.fillRect(a.x - 12, a.y + a.h - alt, a.w + 24, alt + 12);
+  ctx.restore();
+
+  // faixa de grama ilustrada nas arestas viradas para cima
+  if (Img.tem('borda_grama')) {
+    const im = Img.img('borda_grama');
+    for (let i = 0; i < p.length; i++) {
+      const A = p[i], B = p[(i + 1) % p.length];
+      const dx = B[0] - A[0], dy = B[1] - A[1];
+      const comp = Math.hypot(dx, dy);
+      if (comp < 20) continue;
+      const nx = dy / comp, ny = -dx / comp;
+      if (ny > -0.42) continue;
+      const altura = 46;
+      ctx.save();
+      ctx.translate(A[0], A[1]);
+      ctx.rotate(Math.atan2(dy, dx));
+      const larg = im.width * (altura / im.height);
+      for (let x = 0; x < comp; x += larg) {
+        ctx.drawImage(im, x, -altura * 0.72, Math.min(larg, comp - x + 2), altura);
+      }
+      ctx.restore();
+      void nx; void ny;
+    }
+  } else if ((forma.musgo ?? 0.6) > 0.05) {
+    capaDeMusgo(ctx, forma, pal, forma.musgo ?? 0.6, semente);
+  }
+
+  ctx.save();
+  ctx.lineJoin = 'round';
+  contornoVivo(ctx, p, 9, 0.02, semente);
+  ctx.clip();
+  contornoVivo(ctx, p, 9, 0.02, semente);
+  ctx.strokeStyle = comAlfa(pal.luzBorda, 0.42);
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function pintarTerreno(ctx, forma, pal, luz, semente = 0) {
+  if (Img.tem('terra')) return pintarTerrenoIlustrado(ctx, forma, pal, luz, semente);
   const p = forma.p;
   const a = forma.aabb;
   const musgo = forma.musgo ?? 0.6;

@@ -16,6 +16,7 @@ import { Telas } from './ui/screens.js';
 import { audio } from './core/audio.js';
 import { Particulas, Textos } from './core/fx.js';
 import { carregar, gravar, apagar } from './core/save.js';
+import { carregarArte, quantas, catalogo } from './render/imagens.js';
 import { clamp, lerp, damp, TAU } from './core/math.js';
 
 const DT = 1 / 60;
@@ -64,6 +65,16 @@ class App {
 
     window.addEventListener('error', (e) => this.erros.push(String(e.message || e.error)));
     window.addEventListener('unhandledrejection', (e) => this.erros.push('promise: ' + e.reason));
+
+    // A arte ilustrada entra assim que carrega. Enquanto não carrega — ou
+    // quando não existe — o jogo desenha por código e roda igual; por isso o
+    // carregamento não bloqueia nada nem tem tela de espera.
+    this.arteCarregada = 0;
+    carregarArte(() => {
+      this.arteCarregada = quantas();
+      if (this.mundo.fase) this.cena.prepararFase(this.mundo, this.mundo.fase);
+      this.cena.camadas = null;
+    });
 
     this.abrirFase(0, true);
     this.telas.mostrar('titulo');
@@ -603,6 +614,7 @@ function iniciar() {
     alvos() { return app.hud.alvos.map((a) => ({ ...a })); },
     camera() { return { x: app.cam.x, y: app.cam.y, zoom: app.cam.zoom }; },
     qualidade(q) { if (q !== undefined) app.cena.definirQualidade(q); return app.cena.qualidade; },
+    arte() { return { carregadas: app.arteCarregada, catalogo: catalogo() }; },
     posfx() {
       const p = app.cena.pos;
       return { ok: p.ok, motivo: p.motivo, placa: p.placa || '' };

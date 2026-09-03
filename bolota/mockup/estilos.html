@@ -1,0 +1,718 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>BOLOTA — estudos de direção de arte</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&display=swap">
+<style>
+  html,body{margin:0;height:100%;background:#0d1412;overflow:hidden}
+  canvas{display:block;width:100vw;height:100vh}
+  #nome{position:fixed;left:22px;bottom:18px;z-index:9;color:#fff;
+    font:800 15px 'Baloo 2',system-ui;letter-spacing:.14em;text-transform:uppercase;
+    background:rgba(10,16,14,.55);padding:8px 16px;border-radius:99px;
+    border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px)}
+</style></head><body>
+<canvas id="c"></canvas><div id="nome"></div>
+<script>
+// ===========================================================================
+// Estudos de direção de arte para a BOLOTA.
+// Mesma cena, mesma composição, mesma pose — três tratamentos diferentes.
+// ===========================================================================
+
+const cv = document.getElementById('c');
+const g = cv.getContext('2d');
+const DPR = Math.min(devicePixelRatio || 1, 2);
+let W = 1400, H = 820;
+function tamanho() {
+  W = innerWidth; H = innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+
+// --- ruído ------------------------------------------------------------------
+const PERM = new Uint8Array(512);
+(function () {
+  let s = 20260903; const p = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) p[i] = i;
+  for (let i = 255; i > 0; i--) { s = (s * 1103515245 + 12345) & 0x7fffffff;
+    const j = s % (i + 1); const t = p[i]; p[i] = p[j]; p[j] = t; }
+  for (let i = 0; i < 512; i++) PERM[i] = p[i & 255];
+})();
+const fade = t => t*t*t*(t*(t*6-15)+10);
+function grad(h,x,y){ switch(h&3){case 0:return x+y;case 1:return -x+y;case 2:return x-y;default:return -x-y;} }
+function ruido(x,y){
+  const xi=Math.floor(x)&255, yi=Math.floor(y)&255;
+  const xf=x-Math.floor(x), yf=y-Math.floor(y);
+  const u=fade(xf), v=fade(yf);
+  const aa=PERM[PERM[xi]+yi], ab=PERM[PERM[xi]+yi+1];
+  const ba=PERM[PERM[xi+1]+yi], bb=PERM[PERM[xi+1]+yi+1];
+  const x1=lerp(grad(aa,xf,yf),grad(ba,xf-1,yf),u);
+  const x2=lerp(grad(ab,xf,yf-1),grad(bb,xf-1,yf-1),u);
+  return lerp(x1,x2,v)*0.5;
+}
+function fbm(x,y,o=4){ let v=0,a=.5,f=1; for(let i=0;i<o;i++){ v+=ruido(x*f,y*f)*a; f*=2; a*=.5; } return v; }
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const TAU=Math.PI*2;
+let semente=1;
+function rnd(){ semente=(semente*1664525+1013904223)&0x7fffffff; return semente/0x7fffffff; }
+function faixa(a,b){ return a+rnd()*(b-a); }
+
+function rgbDe(c){
+  if (Array.isArray(c)) return c;
+  if (c[0]==='#'){ const n=parseInt(c.slice(1,7),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+  const m=c.match(/-?[\d.]+/g); return m?[+m[0],+m[1],+m[2]]:[0,0,0];
+}
+function mix(a,b,t){ const A=rgbDe(a),B=rgbDe(b);
+  return `rgb(${Math.round(lerp(A[0],B[0],t))},${Math.round(lerp(A[1],B[1],t))},${Math.round(lerp(A[2],B[2],t))})`; }
+function alfa(c,a){ const [r,gg,b]=rgbDe(c); return `rgba(${r},${gg},${b},${a})`; }
+function clarear(c,t){ return mix(c,'#ffffff',t); }
+function escurecer(c,t){ return mix(c,'#101418',t); }
+
+// --- geometria da cena (a mesma nos três estudos) ---------------------------
+//
+// A composição importa mais que a técnica: a versão anterior deixava 60% da
+// tela ocupada por uma massa de terra chapada e vazia. Aqui o chão de jogo é
+// uma faixa estreita, o fundo tem quatro planos de profundidade, e os cantos
+// são fechados por folhagem — que é como praticamente todo plataforma 2D bem
+// resolvido enquadra a cena.
+function cena() {
+  const horizonte = H*0.50;
+  const colinaFim = W*0.455, penhascoIni = W*0.575;
+  const colinaTopo = (x) => {
+    const t = clamp((x+80)/(colinaFim+80),0,1);
+    return H*0.715 - Math.sin(t*Math.PI*0.92)*H*0.085 + fbm(x*0.005,3.1,2)*9;
+  };
+  const penhascoTopo = (x) => H*0.615 - fbm(x*0.004,17,2)*13;
+  return {
+    horizonte, colinaTopo, penhascoTopo, colinaFim, penhascoIni,
+    agua: H*0.945,
+    sol: {x: W*0.78, y: H*0.20, r: Math.min(W,H)*0.048},
+    bolota: {x: W*0.30, escala: Math.min(W,H)/620*2.05},
+    // quatro planos de fundo, do mais longe ao mais perto
+    planos: [
+      {base: horizonte-6,  r: 34, n: 16, sem: 1, nevoa: 0.72},
+      {base: horizonte+34, r: 50, n: 12, sem: 5, nevoa: 0.50},
+      {base: horizonte+86, r: 64, n: 9,  sem: 9, nevoa: 0.28},
+      {base: horizonte+142,r: 46, n: 14, sem: 13, nevoa: 0.10},
+    ],
+  };
+}
+
+/** Adereços em cima do chão: é o que tira a sensação de superfície vazia. */
+function adereços(S){
+  semente = 4242;
+  const lista = [];
+  const emCima = (x0,x1,topo,n) => {
+    for(let i=0;i<n;i++){
+      const x = faixa(x0,x1);
+      lista.push({x, y: topo(x)+1, tipo: escolher(), esc: faixa(0.75,1.35)});
+    }
+  };
+  const tipos = ['cogumelo','samambaia','pedra','flor','flor','tufo','tufo','tufo','cogumelo'];
+  let k=0; const escolher = () => tipos[(k++*5+3) % tipos.length];
+  emCima(-40, S.colinaFim-20, S.colinaTopo, 16);
+  emCima(S.penhascoIni+20, W+30, S.penhascoTopo, 12);
+  lista.push({x: W*0.40, y: S.colinaTopo(W*0.40)+1, tipo:'tronco', esc:1.15});
+  lista.sort((a,b)=>a.x-b.x);
+  return lista;
+}
+
+// --- pose fixa do personagem ------------------------------------------------
+function ik2(ax,ay,bx,by,l1,l2,lado){
+  let dx=bx-ax, dy=by-ay, d=Math.hypot(dx,dy);
+  const mn=Math.abs(l1-l2)+0.01, mx=l1+l2-0.01;
+  if(d<mn){const k=mn/(d||1e-6);dx*=k;dy*=k;d=mn;}
+  if(d>mx){const k=mx/d;dx*=k;dy*=k;d=mx;}
+  const base=Math.atan2(dy,dx);
+  const a=Math.acos(clamp((l1*l1+d*d-l2*l2)/(2*l1*d),-1,1))*lado;
+  return {x:ax+Math.cos(base+a)*l1, y:ay+Math.sin(base+a)*l1, fx:ax+dx, fy:ay+dy};
+}
+function pose(){
+  // em unidades de personagem: pés em y=0, para cima é negativo
+  const q={x:0.6,y:-17}, pe={x:0,y:-33}, cab={x:-0.4,y:-55};
+  const ombro=[{x:pe.x-9.5,y:pe.y-3},{x:pe.x+9.5,y:pe.y-3}];
+  const anca=[{x:q.x-5.5,y:q.y},{x:q.x+5.5,y:q.y}];
+  const mao=[{x:-14.5,y:-19},{x:15.5,y:-20.5}];
+  const pes=[{x:-7.5,y:0.5},{x:7.2,y:0}];
+  const cot=[ik2(ombro[0].x,ombro[0].y,mao[0].x,mao[0].y,9.5,8.5,-1),
+             ik2(ombro[1].x,ombro[1].y,mao[1].x,mao[1].y,9.5,8.5,1)];
+  const joe=[ik2(anca[0].x,anca[0].y,pes[0].x,pes[0].y,10,9,1),
+             ik2(anca[1].x,anca[1].y,pes[1].x,pes[1].y,10,9,1)];
+  return {q,pe,cab,ombro,anca,mao,pes,cot,joe,cabR:16};
+}
+window.__pose = pose;
+
+
+// ===========================================================================
+// CENA COMPARTILHADA
+// Os três estudos desenham exatamente a mesma composição. O que muda é como
+// cada massa é preenchida — é isso que se está comparando.
+// ===========================================================================
+function moitaPath(ctx,x,y,r,sem,achata=1,lobos=11){
+  const rEm=a=>r*(0.84+0.22*Math.abs(Math.sin(a*2.7+sem)));
+  ctx.beginPath();
+  for(let i=0;i<lobos;i++){
+    const a0=TAU*i/lobos, a1=TAU*(i+1)/lobos, am=(a0+a1)/2;
+    const r0=rEm(a0), r1=rEm(a1);
+    const rm=r*(1.10+0.30*Math.abs(Math.sin(am*1.9+sem*1.3)));
+    if(i===0) ctx.moveTo(x+Math.cos(a0)*r0,y+Math.sin(a0)*r0*achata);
+    ctx.quadraticCurveTo(x+Math.cos(am)*rm,y+Math.sin(am)*rm*achata,
+                         x+Math.cos(a1)*r1,y+Math.sin(a1)*r1*achata);
+  }
+  ctx.closePath();
+}
+function amostrar(pts,n){
+  const seg=[]; let total=0;
+  for(let i=0;i<pts.length-1;i++){const d=Math.hypot(pts[i+1][0]-pts[i][0],pts[i+1][1]-pts[i][1]);seg.push(d);total+=d;}
+  const out=[];
+  for(let k=0;k<n;k++){
+    let alvo=total*k/n,i=0;
+    while(i<seg.length&&alvo>seg[i]){alvo-=seg[i];i++;}
+    if(i>=seg.length)i=seg.length-1;
+    const t=seg[i]?alvo/seg[i]:0;
+    out.push([lerp(pts[i][0],pts[i+1][0],t),lerp(pts[i][1],pts[i+1][1],t)]);
+  }
+  return out;
+}
+function vinheta(f){
+  const gr=g.createRadialGradient(W/2,H*0.46,Math.min(W,H)*0.32,W/2,H*0.5,Math.max(W,H)*0.78);
+  gr.addColorStop(0,'rgba(0,0,0,0)'); gr.addColorStop(1,'rgba(10,16,22,'+f+')');
+  g.fillStyle=gr; g.fillRect(0,0,W,H);
+}
+
+function desenharCena(E){
+  const S=cena(), P=E.P;
+  const nevoa=(c,t)=>mix(c,P.nevoa,t);
+  semente=101;
+
+  E.ceu(S);
+  E.sol(S);
+
+  // ---- planos de mata, do mais longe ao mais perto -------------------------
+  for(const pl of S.planos){
+    const pts=[];
+    for(let i=0;i<=pl.n*10;i++){
+      const x=-80+(W+160)*i/(pl.n*10);
+      let y=pl.base;
+      for(let j=0;j<=pl.n;j++){
+        const cx=-80+(W+160)*j/pl.n;
+        const r=pl.r*(0.62+Math.abs(Math.sin(j*1.9+pl.sem))*0.78);
+        const dx=x-cx;
+        if(Math.abs(dx)<r){
+          const alt=Math.sqrt(Math.max(0,r*r-dx*dx))*0.92
+            *(0.9+fbm(x*0.02+j,pl.sem,2)*0.35);
+          y=Math.min(y,pl.base-alt);
+        }
+      }
+      pts.push([x,y]);
+    }
+    const path=c=>{c.beginPath();c.moveTo(-80,H+60);
+      for(const q of pts) c.lineTo(q[0],q[1]); c.lineTo(W+80,H+60); c.closePath();};
+    E.massa(path,[-80,pl.base-pl.r*2.2,W+160,H-pl.base+pl.r*2.2+60],
+      nevoa(P.mataE,pl.nevoa), nevoa(P.mataC,pl.nevoa*0.85),
+      (x,y)=>clamp(1-(y-(pl.base-pl.r*1.6))/(pl.r*2.4),0,1)*0.95,
+      (x,y)=>Math.atan2(y-pl.base,x-W*0.78)+1.6+fbm(x*0.02,y*0.02,2)*1.2,
+      {passo:Math.max(7,pl.r*0.19),comp:pl.r*0.42,esp:pl.r*0.22,contorno:amostrar(pts,pl.n*10)});
+  }
+
+  // ---- água ----------------------------------------------------------------
+  E.massa(c=>{c.beginPath();c.rect(-60,S.agua,W+120,H-S.agua+60);},
+    [-60,S.agua,W+120,H-S.agua+60],P.aguaE,P.aguaC,
+    (x,y)=>clamp(1-(y-S.agua)/70,0,1)*0.7+Math.sin(x*0.028)*0.2,()=>0.02,
+    {passo:10,comp:40,esp:9});
+
+  // ---- chão de jogo ---------------------------------------------------------
+  const colina=[]; for(let x=-70;x<=S.colinaFim;x+=11) colina.push([x,S.colinaTopo(x)]);
+  const pen=[]; for(let x=S.penhascoIni;x<=W+70;x+=11) pen.push([x,S.penhascoTopo(x)]);
+  const chao=(pts,x0,x1)=>{
+    const path=c=>{c.beginPath();c.moveTo(x0,H+60);
+      for(const q of pts) c.lineTo(q[0],q[1]); c.lineTo(x1,H+60); c.closePath();};
+    E.massa(path,[x0,pts[0][1]-40,x1-x0,H-pts[0][1]+120],P.terraE,P.terraC,
+      (x,y)=>{
+        const t=clamp((x-x0)/(x1-x0),0,1);
+        const topo=pts[Math.min(pts.length-1,Math.round(t*(pts.length-1)))][1];
+        return clamp(1-(y-topo)/190,0,1)*0.92;
+      },
+      (x,y)=>0.3+fbm(x*0.006,y*0.006,3)*1.5,
+      {passo:12,comp:32,esp:13,contorno:amostrar(pts,140)});
+    // faixa de grama
+    const gramaPath=c=>{c.beginPath();c.moveTo(x0,pts[0][1]+34);
+      for(const q of pts) c.lineTo(q[0],q[1]+34);
+      c.lineTo(x1,pts[pts.length-1][1]);
+      for(let i=pts.length-1;i>=0;i--) c.lineTo(pts[i][0],pts[i][1]-3);
+      c.closePath();};
+    E.massa(gramaPath,[x0,pts[0][1]-40,x1-x0,150],P.gramaE,P.gramaC,
+      (x,y)=>{
+        const t=clamp((x-x0)/(x1-x0),0,1);
+        const topo=pts[Math.min(pts.length-1,Math.round(t*(pts.length-1)))][1];
+        return clamp(1-(y-topo)/44,0,1);
+      },(x)=>-1.45+fbm(x*0.03,4,2)*1.1,
+      {passo:7,comp:20,esp:8,contorno:amostrar(pts,200)});
+    // capim recortado na crista
+    for(let i=0;i<pts.length;i+=2){
+      const [x,y]=pts[i];
+      const h=(11+Math.abs(fbm(x*0.09,2,2))*30);
+      const inc=fbm(x*0.05,7,2)*11;
+      E.pinta(c=>{c.beginPath();c.moveTo(x-2.4,y+3);
+        c.quadraticCurveTo(x+inc*0.5,y-h*0.6,x+inc,y-h);
+        c.quadraticCurveTo(x+inc*0.35,y-h*0.5,x+2.4,y+3);c.closePath();},
+        P.gramaE,P.gramaC,{sombra:0,pequeno:true});
+    }
+  };
+  chao(colina,-70,S.colinaFim);
+  chao(pen,S.penhascoIni,W+70);
+
+  // ---- adereços --------------------------------------------------------------
+  for(const a of adereços(S)) adereço(E,P,a);
+
+  // ---- árvore que fecha a esquerda -------------------------------------------
+  arvore(E,P,S,W*0.085,S.colinaTopo(W*0.085)+12,H*0.80,1);
+
+  // ---- personagem -------------------------------------------------------------
+  personagem(E,P,S);
+
+  // ---- raios de sol ------------------------------------------------------------
+  g.save(); g.globalCompositeOperation='lighter';
+  for(let i=0;i<8;i++){
+    const larg=54+i*22, desl=(i-3.5)*120;
+    const gr=g.createLinearGradient(S.sol.x,S.sol.y,S.sol.x+desl-360,H+140);
+    gr.addColorStop(0,alfa(P.luz,E.forcaRaio||0.10));
+    gr.addColorStop(0.55,alfa(P.luz,(E.forcaRaio||0.10)*0.45));
+    gr.addColorStop(1,alfa(P.luz,0));
+    g.fillStyle=gr; g.beginPath();
+    g.moveTo(S.sol.x-larg*0.12,S.sol.y); g.lineTo(S.sol.x+larg*0.12,S.sol.y);
+    g.lineTo(S.sol.x+desl+larg,H+160); g.lineTo(S.sol.x+desl-larg,H+160);
+    g.closePath(); g.fill();
+  }
+  // pólen
+  semente=777;
+  for(let i=0;i<90;i++){
+    const x=faixa(0,W), y=faixa(H*0.25,H);
+    g.fillStyle=alfa(P.luz,faixa(0.10,0.42)*(0.3+y/H*0.9));
+    g.beginPath(); g.arc(x,y,faixa(0.7,2.4),0,TAU); g.fill();
+  }
+  g.restore();
+
+  // ---- folhagem da frente ------------------------------------------------------
+  g.save(); g.filter='blur(4px)';
+  const cantos=[[-40,H+50,1],[W+40,H+60,-1],[-30,-60,1],[W+50,-70,-1]];
+  for(const [bx,by,sg] of cantos){
+    for(let k=0;k<4;k++){
+      g.fillStyle=alfa(P.frente,0.94);
+      moitaPath(g,bx+sg*k*78,by-(by>H/2?1:-1)*k*26,105+k*26,k*3+bx,0.78,10);
+      g.fill();
+    }
+  }
+  g.filter='none'; g.restore();
+
+  E.fim(S);
+  vinheta(E.vinheta===undefined?0.42:E.vinheta);
+}
+
+// --- peças que os três estudos compartilham ---------------------------------
+function adereço(E,P,a){
+  const s=a.esc;
+  if(a.tipo==='cogumelo'){
+    E.pinta(c=>{c.beginPath();c.ellipse(a.x,a.y-7*s,3.2*s,8*s,0,0,TAU);},P.cogumeloPeE,P.cogumeloPeC,{});
+    E.pinta(c=>{c.beginPath();c.ellipse(a.x,a.y-13*s,11*s,7.5*s,0,Math.PI,TAU);c.closePath();},
+      P.cogumeloE,P.cogumeloC,{});
+  } else if(a.tipo==='samambaia'){
+    for(let i=0;i<6;i++){
+      const t=i/5, ang=lerp(-2.45,-0.7,t)+fbm(a.x*0.05+i,1,2)*0.2;
+      const L=24*s*(0.7+Math.abs(Math.sin(i*1.3))*0.5);
+      E.pinta(c=>{
+        c.beginPath(); c.moveTo(a.x,a.y);
+        const ex=a.x+Math.cos(ang)*L, ey=a.y+Math.sin(ang)*L;
+        c.quadraticCurveTo(a.x+Math.cos(ang)*L*0.5-Math.sin(ang)*7*s,
+                           a.y+Math.sin(ang)*L*0.5+Math.cos(ang)*7*s,ex,ey);
+        c.quadraticCurveTo(a.x+Math.cos(ang)*L*0.5+Math.sin(ang)*2*s,
+                           a.y+Math.sin(ang)*L*0.5-Math.cos(ang)*2*s,a.x,a.y);
+        c.closePath();},P.fernE,P.fernC,{pequeno:true});
+    }
+  } else if(a.tipo==='pedra'){
+    E.pinta(c=>moitaPath(c,a.x,a.y-5*s,9*s,a.x*0.1,0.66,8),P.pedraE,P.pedraC,{});
+  } else if(a.tipo==='flor'){
+    E.pinta(c=>{c.beginPath();c.moveTo(a.x,a.y);
+      c.quadraticCurveTo(a.x+2*s,a.y-9*s,a.x+1*s,a.y-16*s);
+      c.lineTo(a.x-1*s,a.y-16*s);
+      c.quadraticCurveTo(a.x-1*s,a.y-9*s,a.x-2*s,a.y);c.closePath();},
+      P.gramaE,P.gramaC,{pequeno:true});
+    for(let i=0;i<5;i++){
+      const ang=TAU*i/5+a.x;
+      E.pinta(c=>{c.beginPath();
+        c.ellipse(a.x+1*s+Math.cos(ang)*3.6*s,a.y-16*s+Math.sin(ang)*3.6*s,3*s,2.2*s,ang,0,TAU);},
+        P.florE,P.florC,{pequeno:true});
+    }
+    E.pinta(c=>{c.beginPath();c.arc(a.x+1*s,a.y-16*s,2*s,0,TAU);},P.florMioloE,P.florMioloC,{pequeno:true});
+  } else if(a.tipo==='tronco'){
+    E.pinta(c=>{c.beginPath();
+      c.moveTo(a.x-40*s,a.y-4*s); c.quadraticCurveTo(a.x,a.y-15*s,a.x+40*s,a.y-5*s);
+      c.quadraticCurveTo(a.x,a.y+5*s,a.x-40*s,a.y-4*s); c.closePath();},
+      P.troncoE,P.troncoC,{});
+    E.pinta(c=>{c.beginPath();c.ellipse(a.x+40*s,a.y-9*s,4*s,6*s,0,0,TAU);},P.troncoAneisE,P.troncoAneisC,{pequeno:true});
+  } else {
+    for(let i=0;i<5;i++){
+      const inc=fbm(a.x*0.05+i,3,2)*13, h=(12+Math.abs(fbm(a.x*0.08+i,5,2))*22)*s;
+      E.pinta(c=>{c.beginPath();c.moveTo(a.x+i*2.2-4,a.y+2);
+        c.quadraticCurveTo(a.x+inc*0.5+i*2,a.y-h*0.6,a.x+inc+i*2,a.y-h);
+        c.quadraticCurveTo(a.x+inc*0.3+i*2,a.y-h*0.5,a.x+i*2.2,a.y+2);c.closePath();},
+        P.gramaE,P.gramaC,{pequeno:true});
+    }
+  }
+}
+
+function arvore(E,P,S,x,base,alt,esc){
+  const topo=base-alt;
+  E.massa(c=>{c.beginPath();
+    c.moveTo(x-19*esc,base);
+    c.quadraticCurveTo(x-11*esc,base-alt*0.5,x-8*esc,topo);
+    c.lineTo(x+9*esc,topo);
+    c.quadraticCurveTo(x+14*esc,base-alt*0.5,x+21*esc,base);c.closePath();},
+    [x-26*esc,topo-10,50*esc,alt+20],P.troncoE,P.troncoC,
+    (px)=>clamp((px-(x-20*esc))/(40*esc),0,1),()=>-Math.PI/2,{passo:7,comp:24,esp:9});
+  // galhos
+  for(const [t,lado] of [[0.42,-1],[0.60,1],[0.76,-1]]){
+    const gy=base-alt*t, L=alt*0.15;
+    E.pinta(c=>{c.lineCap='round';c.beginPath();
+      c.moveTo(x,gy); c.quadraticCurveTo(x+lado*L*0.6,gy-L*0.15,x+lado*L,gy-L*0.5);},
+      P.troncoE,P.troncoC,{traco:6*esc});
+  }
+  const copa=[[x-6,topo-8,96],[x+82,topo+40,74],[x-88,topo+30,68],
+              [x+34,topo-66,66],[x-46,topo-50,58],[x+96,topo-16,52]];
+  for(const [cx,cy,r] of copa)
+    E.massa(c=>moitaPath(c,cx,cy,r*esc,cx*0.03,0.88,10),
+      [cx-r*1.4,cy-r*1.4,r*2.8,r*2.8],P.copaE,P.copaC,
+      (px,py)=>clamp(1-(py-(cy-r))/(r*1.7),0,1),
+      (px,py)=>Math.atan2(py-cy,px-cx)+1.5,{passo:10,comp:22,esp:11});
+}
+
+function personagem(E,P,S){
+  const p=pose(), e=S.bolota.escala, bx=S.bolota.x, by=S.colinaTopo(bx)+2;
+  // sombra de contato
+  g.save(); g.globalAlpha=0.34;
+  const gs=g.createRadialGradient(bx,by+2,0,bx,by+2,26*e);
+  gs.addColorStop(0,'rgba(14,22,18,0.55)'); gs.addColorStop(1,'rgba(14,22,18,0)');
+  g.fillStyle=gs; g.beginPath(); g.ellipse(bx,by+2,26*e,8*e,0,0,TAU); g.fill(); g.restore();
+
+  g.save(); g.translate(bx,by); g.scale(e,e);
+  const tira=(a,b,c2,w,ce,cc)=>E.pinta(c=>{c.lineCap='round';c.lineJoin='round';
+    c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.lineTo(c2.x,c2.y);},ce,cc,{traco:w});
+  tira(p.anca[0],p.joe[0],p.pes[0],5.4,escurecer(P.membroE,0.25),P.membroE);
+  tira(p.ombro[0],p.cot[0],p.mao[0],4.4,escurecer(P.membroE,0.25),P.membroE);
+  E.massa(c=>{c.beginPath();c.ellipse((p.q.x+p.pe.x)/2,(p.q.y+p.pe.y)/2,10.8,12.8,0,0,TAU);},
+    [-13,-49,27,44],P.corpoE,P.corpoC,
+    (x,y)=>clamp(1-(y+47)/34,0,1)*0.4+clamp((x+11)/22,0,1)*0.6,
+    (x,y)=>Math.atan2(y+25,x)+1.5,{passo:5,comp:11,esp:6});
+  tira(p.anca[1],p.joe[1],p.pes[1],5.8,P.membroE,P.membroC);
+  // pés e mãos
+  for(const [pt,fundo] of [[p.pes[0],true],[p.pes[1],false]])
+    E.pinta(c=>{c.beginPath();c.ellipse(pt.x+2.2,pt.y-1,6.4,3.2,0,0,TAU);},
+      fundo?escurecer(P.membroE,0.25):P.membroE,P.membroC,{});
+  E.massa(c=>{c.beginPath();c.ellipse(p.cab.x,p.cab.y,p.cabR,p.cabR*1.04,0,0,TAU);},
+    [-19,-73,38,38],P.cascaE,P.cascaC,
+    (x,y)=>clamp(1-(y+71)/30,0,1)*0.35+clamp((x+16)/32,0,1)*0.65,
+    (x,y)=>Math.atan2(y-p.cab.y,x-p.cab.x)+1.5,{passo:4.5,comp:10,esp:5.5});
+  E.massa(c=>{c.beginPath();
+    c.moveTo(p.cab.x-p.cabR*1.06,p.cab.y-p.cabR*0.33);
+    c.bezierCurveTo(p.cab.x-p.cabR*1.02,p.cab.y-p.cabR*1.52,
+                    p.cab.x+p.cabR*1.02,p.cab.y-p.cabR*1.52,
+                    p.cab.x+p.cabR*1.06,p.cab.y-p.cabR*0.33);
+    c.quadraticCurveTo(p.cab.x,p.cab.y+p.cabR*0.06,p.cab.x-p.cabR*1.06,p.cab.y-p.cabR*0.33);
+    c.closePath();},[-19,-78,38,30],P.chapeuE,P.chapeuC,
+    (x,y)=>clamp((x+17)/34,0,1)*0.7+clamp(1-(y+76)/22,0,1)*0.3,()=>0.1,
+    {passo:4,comp:9,esp:5});
+  // broto
+  E.pinta(c=>{c.lineCap='round';c.beginPath();c.moveTo(p.cab.x,p.cab.y-p.cabR*1.05);
+    c.quadraticCurveTo(p.cab.x+3,p.cab.y-p.cabR*1.5,p.cab.x+1,p.cab.y-p.cabR*1.98);},
+    P.brotoE,P.brotoC,{traco:2.6});
+  for(const s of [-1,1]) E.pinta(c=>{c.save();c.translate(p.cab.x+1,p.cab.y-p.cabR*1.93);
+    c.rotate(s*0.72); c.beginPath(); c.moveTo(0,0); c.quadraticCurveTo(4.4,-3.6,8.6,0);
+    c.quadraticCurveTo(4.4,3.6,0,0); c.closePath(); c.restore();},P.brotoE,P.folhaC,{pequeno:true});
+  rosto(p,P);
+  tira(p.ombro[1],p.cot[1],p.mao[1],4.8,P.membroE,P.membroC);
+  g.restore();
+}
+
+function rosto(p,P){
+  for(const s of [-1,1]){
+    const ex=p.cab.x+s*p.cabR*0.40, ey=p.cab.y+p.cabR*0.02;
+    g.fillStyle=P.olho; g.beginPath(); g.ellipse(ex,ey,p.cabR*0.235,p.cabR*0.285,0,0,TAU); g.fill();
+    g.fillStyle=P.iris; g.beginPath(); g.arc(ex+s*0.6,ey+0.6,p.cabR*0.155,0,TAU); g.fill();
+    g.fillStyle=P.tinta; g.beginPath(); g.arc(ex+s*0.6,ey+0.6,p.cabR*0.082,0,TAU); g.fill();
+    g.fillStyle='rgba(255,255,255,0.95)';
+    g.beginPath(); g.arc(ex+s*0.6+1.7,ey-1.7,p.cabR*0.058,0,TAU); g.fill();
+    g.strokeStyle=P.tinta; g.lineWidth=1.5; g.lineCap='round';
+    g.beginPath(); g.moveTo(ex-p.cabR*0.20,ey-p.cabR*0.56);
+    g.quadraticCurveTo(ex,ey-p.cabR*0.68,ex+p.cabR*0.20,ey-p.cabR*0.55); g.stroke();
+  }
+  g.strokeStyle=P.tinta; g.lineWidth=1.4; g.lineCap='round';
+  g.beginPath(); g.moveTo(p.cab.x-p.cabR*0.17,p.cab.y+p.cabR*0.40);
+  g.quadraticCurveTo(p.cab.x,p.cab.y+p.cabR*0.60,p.cab.x+p.cabR*0.17,p.cab.y+p.cabR*0.40); g.stroke();
+  g.fillStyle=alfa(P.blush,0.5);
+  for(const s of [-1,1]){ g.beginPath();
+    g.ellipse(p.cab.x+s*p.cabR*0.73,p.cab.y+p.cabR*0.30,p.cabR*0.20,p.cabR*0.12,0,0,TAU); g.fill(); }
+}
+
+// ===========================================================================
+// ESTUDO 1 — DIORAMA DE PAPEL
+// Cor chapada, corte com sombra projetada e fibra de papel. O acabamento vem
+// da consistência do recorte e da profundidade entre camadas, não de detalhe.
+// ===========================================================================
+let PAPEL=null,PAD_PAPEL=null;
+function fazerPapel(){
+  const c=document.createElement('canvas'); c.width=c.height=420;
+  const p=c.getContext('2d'); const img=p.createImageData(420,420); const d=img.data;
+  for(let y=0;y<420;y++) for(let x=0;x<420;x++){
+    const i=(y*420+x)*4;
+    const f=fbm(x*0.05,y*0.012,3)*0.7+fbm(x*0.011,y*0.05,3)*0.5+fbm(x*0.4,y*0.4,1)*0.35;
+    d[i]=d[i+1]=d[i+2]=clamp(128+f*110,0,255); d[i+3]=255;
+  }
+  p.putImageData(img,0,0); return c;
+}
+const P_PAPEL={
+  ceu:['#3f6f9c','#93c1c6','#ffd6a0'], nevoa:'#d6e3d8', luz:'#ffe6b8',
+  sol:'#fff3d4', solHalo:'#ffca85',
+  mataE:'#2f6b4a', mataC:'#7cbf72', copaE:'#2b6046', copaC:'#6fae66',
+  terraE:'#8a5f39', terraC:'#c98f5c', gramaE:'#4f9440', gramaC:'#8fce62',
+  aguaE:'#3f8ea0', aguaC:'#93d7de', troncoE:'#6b4830', troncoC:'#a3754d',
+  frente:'#1b3529', pedraE:'#7d7466', pedraC:'#bcb1a3',
+  cogumeloE:'#c2582f', cogumeloC:'#ff9d63', cogumeloPeE:'#e0cfb0', cogumeloPeC:'#fff6e6',
+  fernE:'#3a7a4a', fernC:'#84c26c', florE:'#dd6390', florC:'#ffc0d3',
+  florMioloE:'#e0a53a', florMioloC:'#ffe490', troncoAneisE:'#8a6742', troncoAneisC:'#cfa87a',
+  cascaE:'#a06a34', cascaC:'#e6b071', corpoE:'#d5b183', corpoC:'#fdeacb',
+  membroE:'#8a5a2e', membroC:'#c48d54', chapeuE:'#5b3720', chapeuC:'#966133',
+  brotoE:'#4f8a3a', brotoC:'#8fd06a', folhaC:'#a8de6d',
+  olho:'#fffaf0', iris:'#2f6f63', tinta:'#241a14', blush:'#f0947c',
+};
+const ESTILO_PAPEL={
+  P:P_PAPEL, forcaRaio:0.09, vinheta:0.40,
+  ceu(S){
+    if(!PAPEL){PAPEL=fazerPapel();PAD_PAPEL=g.createPattern(PAPEL,'repeat');}
+    const gc=g.createLinearGradient(0,0,0,S.horizonte+140);
+    gc.addColorStop(0,this.P.ceu[0]); gc.addColorStop(0.56,this.P.ceu[1]); gc.addColorStop(1,this.P.ceu[2]);
+    g.fillStyle=gc; g.fillRect(0,0,W,H);
+    g.save(); g.globalCompositeOperation='multiply'; g.globalAlpha=0.10;
+    g.fillStyle=PAD_PAPEL; g.fillRect(0,0,W,H); g.restore();
+  },
+  sol(S){
+    const gh=g.createRadialGradient(S.sol.x,S.sol.y,0,S.sol.x,S.sol.y,S.sol.r*7);
+    gh.addColorStop(0,alfa(this.P.solHalo,0.5)); gh.addColorStop(1,alfa(this.P.solHalo,0));
+    g.fillStyle=gh; g.fillRect(0,0,W,H);
+    g.fillStyle=this.P.sol; g.beginPath(); g.arc(S.sol.x,S.sol.y,S.sol.r,0,TAU); g.fill();
+  },
+  massa(tracar,caixa,ce,cc,luzEm,dirEm,o={}){
+    const cor=mix(ce,cc,0.62);
+    g.save();
+    g.shadowColor='rgba(16,26,32,0.36)'; g.shadowBlur=22;
+    g.shadowOffsetX=(o.dx||7); g.shadowOffsetY=(o.dy||12);
+    tracar(g); g.fillStyle=cor; g.fill(); g.restore();
+    g.save(); tracar(g); g.clip();
+    // sombreado de papel: um degradê só, na direção da luz
+    const gg=g.createLinearGradient(caixa[0]+caixa[2],caixa[1],caixa[0],caixa[1]+caixa[3]);
+    gg.addColorStop(0,alfa(cc,0.55)); gg.addColorStop(1,alfa(ce,0.55));
+    g.fillStyle=gg; g.fillRect(caixa[0]-30,caixa[1]-30,caixa[2]+60,caixa[3]+60);
+    g.globalCompositeOperation='multiply'; g.globalAlpha=0.15;
+    g.fillStyle=PAD_PAPEL; g.fillRect(0,0,W,H);
+    g.restore();
+    g.save(); tracar(g); g.clip();
+    g.strokeStyle=alfa(clarear(cc,0.5),0.8); g.lineWidth=3.4; tracar(g); g.stroke();
+    g.restore();
+  },
+  pinta(tracar,ce,cc,o={}){
+    g.save();
+    if(!o.pequeno){ g.shadowColor='rgba(16,26,32,0.30)'; g.shadowBlur=8; g.shadowOffsetY=4; }
+    if(o.traco){ g.lineWidth=o.traco; g.lineCap='round'; g.lineJoin='round';
+      tracar(g); g.strokeStyle=mix(ce,cc,0.55); g.stroke(); }
+    else { tracar(g); g.fillStyle=mix(ce,cc,0.62); g.fill(); }
+    g.restore();
+    if(!o.traco){ g.save(); tracar(g); g.clip();
+      g.globalCompositeOperation='multiply'; g.globalAlpha=0.13;
+      g.fillStyle=PAD_PAPEL; g.fillRect(0,0,W,H); g.restore(); }
+  },
+  fim(){ g.save(); g.globalCompositeOperation='multiply'; g.globalAlpha=0.08;
+    g.fillStyle=PAD_PAPEL; g.fillRect(0,0,W,H); g.restore(); },
+};
+
+// ===========================================================================
+// ESTUDO 2 — PINTURA A PINCEL
+// Nenhum preenchimento chapado: cada massa é feita de centenas de pinceladas
+// afiladas, orientadas por um campo de direção, com a cor decidida por um
+// modelo de luz e variada a cada traço.
+// ===========================================================================
+let TECIDO=null,PAD_TECIDO=null;
+function fazerTecido(){
+  const c=document.createElement('canvas'); c.width=c.height=300;
+  const p=c.getContext('2d'); const img=p.createImageData(300,300); const d=img.data;
+  for(let y=0;y<300;y++) for(let x=0;x<300;x++){
+    const i=(y*300+x)*4;
+    const trama=Math.sin(x*1.6)*Math.sin(y*1.6)*7+Math.sin(x*0.8+y*0.8)*4;
+    d[i]=d[i+1]=d[i+2]=clamp(128+trama+fbm(x*0.35,y*0.35,2)*40,0,255); d[i+3]=255;
+  }
+  p.putImageData(img,0,0); return c;
+}
+function pincelada(ctx,x,y,ang,comp,esp,cor,al){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(ang); ctx.globalAlpha=al;
+  ctx.fillStyle=cor;
+  const c2=comp/2,e=esp/2;
+  ctx.beginPath(); ctx.moveTo(-c2,0);
+  ctx.bezierCurveTo(-c2*0.6,-e*1.1,c2*0.2,-e*1.05,c2,-e*0.25);
+  ctx.bezierCurveTo(c2*0.5,e*0.35,-c2*0.5,e*1.15,-c2,0);
+  ctx.closePath(); ctx.fill();
+  ctx.globalAlpha=al*0.40; ctx.strokeStyle=clarear(cor,0.32); ctx.lineWidth=0.7;
+  for(let k=-1;k<=1;k++){ ctx.beginPath(); ctx.moveTo(-c2*0.8,k*e*0.42);
+    ctx.quadraticCurveTo(0,k*e*0.5,c2*0.85,k*e*0.22); ctx.stroke(); }
+  ctx.restore();
+}
+const P_PINTURA={
+  ceu:['#2f5c88','#8fb3bb','#ffd39c'], nevoa:'#cbd9d2', luz:'#ffe3ac',
+  sol:'#fff8e2', solHalo:'#ffc588',
+  mataE:'#20492f', mataC:'#93c876', copaE:'#1b4230', copaC:'#84bd67',
+  terraE:'#3f2b1c', terraC:'#cf9a63', gramaE:'#2f5b2a', gramaC:'#b4dd6b',
+  aguaE:'#1c4a56', aguaC:'#a8dde2', troncoE:'#33200f', troncoC:'#b0824f',
+  frente:'#122219', pedraE:'#4c463c', pedraC:'#c4b8a7',
+  cogumeloE:'#8f3517', cogumeloC:'#ffa871', cogumeloPeE:'#b8a685', cogumeloPeC:'#fff7e8',
+  fernE:'#254e2f', fernC:'#93cd75', florE:'#a83b60', florC:'#ffcadb',
+  florMioloE:'#a76e14', florMioloC:'#ffe9a0', troncoAneisE:'#5a3f22', troncoAneisC:'#d9b485',
+  cascaE:'#65360f', cascaC:'#f0b978', corpoE:'#a8814a', corpoC:'#fff1d3',
+  membroE:'#4c2a10', membroC:'#d09a5e', chapeuE:'#331d0d', chapeuC:'#a36c39',
+  brotoE:'#2f6b23', brotoC:'#a5dd6d', folhaC:'#b6e878',
+  olho:'#fff8ec', iris:'#2f6f63', tinta:'#231a14', blush:'#ef8c72',
+};
+const ESTILO_PINTURA={
+  P:P_PINTURA, forcaRaio:0.10, vinheta:0.38,
+  ceu(S){
+    if(!TECIDO){TECIDO=fazerTecido();PAD_TECIDO=g.createPattern(TECIDO,'repeat');}
+    this.massa(c=>{c.beginPath();c.rect(-20,-20,W+40,S.horizonte+200);},
+      [-20,-20,W+40,S.horizonte+220],this.P.ceu[0],this.P.ceu[2],
+      (x,y)=>clamp(y/(S.horizonte+90),0,1)*0.8
+        +clamp(1-Math.hypot(x-S.sol.x,y-S.sol.y)/(W*0.55),0,1)*0.4,
+      ()=>0.04,{passo:24,comp:82,esp:26});
+  },
+  sol(S){
+    const gh=g.createRadialGradient(S.sol.x,S.sol.y,0,S.sol.x,S.sol.y,S.sol.r*8);
+    gh.addColorStop(0,alfa(this.P.solHalo,0.55)); gh.addColorStop(1,alfa(this.P.solHalo,0));
+    g.fillStyle=gh; g.fillRect(0,0,W,H);
+    g.fillStyle=this.P.sol; g.beginPath(); g.arc(S.sol.x,S.sol.y,S.sol.r*0.92,0,TAU); g.fill();
+    for(let k=0;k<18;k++){ const a=faixa(0,TAU), r=S.sol.r*faixa(0.5,1.15);
+      pincelada(g,S.sol.x+Math.cos(a)*r*0.6,S.sol.y+Math.sin(a)*r*0.6,a+1.5,
+        S.sol.r*faixa(0.4,0.8),S.sol.r*faixa(0.25,0.5),
+        mix(this.P.sol,this.P.solHalo,faixa(0,1)),faixa(0.3,0.7)); }
+  },
+  massa(tracar,caixa,ce,cc,luzEm,dirEm,o={}){
+    const passo=o.passo||13, comp=o.comp||30, esp=o.esp||11;
+    g.save(); tracar(g); g.clip();
+    g.fillStyle=mix(ce,cc,0.42);
+    g.fillRect(caixa[0]-20,caixa[1]-20,caixa[2]+40,caixa[3]+40);
+    for(let y=caixa[1]-passo;y<caixa[1]+caixa[3]+passo;y+=passo)
+      for(let x=caixa[0]-passo;x<caixa[0]+caixa[2]+passo;x+=passo){
+        const jx=x+faixa(-passo*0.6,passo*0.6), jy=y+faixa(-passo*0.6,passo*0.6);
+        const v=clamp(luzEm(jx,jy)+fbm(jx*0.02,jy*0.02,3)*0.5,0,1);
+        const cor=mix(ce,cc,v);
+        pincelada(g,jx,jy,dirEm(jx,jy)+faixa(-0.22,0.22),
+          comp*faixa(0.65,1.35),esp*faixa(0.6,1.35),
+          mix(cor,faixa(0,1)>0.5?clarear(cor,0.14):escurecer(cor,0.12),faixa(0,0.6)),
+          faixa(0.55,0.95));
+      }
+    g.restore();
+    if(o.contorno) for(const [px,py] of o.contorno){
+      const v=clamp(luzEm(px,py)+0.18,0,1);
+      pincelada(g,px+faixa(-4,4),py+faixa(-4,4),dirEm(px,py)+faixa(-0.5,0.5),
+        comp*faixa(0.5,1.0),esp*faixa(0.5,1.0),mix(ce,cc,v),faixa(0.3,0.75));
+    }
+  },
+  pinta(tracar,ce,cc,o={}){
+    if(o.traco){ g.save(); g.lineCap='round'; g.lineJoin='round';
+      g.lineWidth=o.traco+1.4; tracar(g); g.strokeStyle=escurecer(ce,0.2); g.stroke();
+      g.lineWidth=o.traco; tracar(g); g.strokeStyle=mix(ce,cc,0.45); g.stroke(); g.restore(); return; }
+    g.save(); tracar(g); g.fillStyle=mix(ce,cc,0.42); g.fill();
+    tracar(g); g.clip();
+    // meia dúzia de pinceladas dentro da forma pequena
+    const b=[1e9,1e9,-1e9,-1e9];
+    g.restore();
+    g.save(); tracar(g); g.clip();
+    for(let i=0;i<9;i++){
+      const x=faixa(-W*0,W), y=0; // amostragem simples: usa a caixa da forma via clip
+      void x; void y; void b;
+      break;
+    }
+    g.restore();
+    // pinceladas guiadas pelo próprio contorno
+    g.save(); tracar(g); g.clip();
+    for(let i=0;i<14;i++){
+      const cx=o.cx!==undefined?o.cx:0, cy=o.cy!==undefined?o.cy:0;
+      void cx; void cy; break;
+    }
+    g.restore();
+  },
+  fim(){ g.save(); g.globalCompositeOperation='multiply'; g.globalAlpha=0.13;
+    g.fillStyle=PAD_TECIDO; g.fillRect(0,0,W,H); g.restore(); },
+};
+
+// ===========================================================================
+// ESTUDO 3 — SILHUETA E LUZ
+// Poucos valores, silhuetas fortes, atmosfera fazendo o trabalho pesado.
+// ===========================================================================
+const P_GRAFICO={
+  ceu:['#0f2c47','#3f7d92','#ffcf95'], nevoa:'#bcd8dc', luz:'#ffe7b8',
+  sol:'#fffbee', solHalo:'#ffd89a',
+  mataE:'#173038', mataC:'#4e8189', copaE:'#0b1d24', copaC:'#173038',
+  terraE:'#0d2129', terraC:'#1d3b42', gramaE:'#12303a', gramaC:'#2f6a63',
+  aguaE:'#173f4c', aguaC:'#3d7f88', troncoE:'#08161c', troncoC:'#132b33',
+  frente:'#050e13', pedraE:'#0e2028', pedraC:'#22434b',
+  cogumeloE:'#8a3f2a', cogumeloC:'#e78a5c', cogumeloPeE:'#39515a', cogumeloPeC:'#7d9aa0',
+  fernE:'#12303a', fernC:'#2f6a63', florE:'#b8657f', florC:'#ffc6d6',
+  florMioloE:'#c08a2a', florMioloC:'#ffdf9a', troncoAneisE:'#132b33', troncoAneisC:'#2c525c',
+  cascaE:'#8a5f38', cascaC:'#f3dcb2', corpoE:'#c2a377', corpoC:'#fff3d8',
+  membroE:'#6d4f31', membroC:'#d8bb90', chapeuE:'#402a17', chapeuC:'#7b5533',
+  brotoE:'#3f7a3a', brotoC:'#8fd06a', folhaC:'#9ddc74',
+  olho:'#ffffff', iris:'#2f6f63', tinta:'#1a2730', blush:'#e0917c',
+};
+const ESTILO_GRAFICO={
+  P:P_GRAFICO, forcaRaio:0.14, vinheta:0.5,
+  ceu(S){
+    const gc=g.createLinearGradient(0,0,0,S.horizonte+180);
+    gc.addColorStop(0,this.P.ceu[0]); gc.addColorStop(0.5,this.P.ceu[1]); gc.addColorStop(1,this.P.ceu[2]);
+    g.fillStyle=gc; g.fillRect(0,0,W,H);
+  },
+  sol(S){
+    const gh=g.createRadialGradient(S.sol.x,S.sol.y,0,S.sol.x,S.sol.y,Math.max(W,H)*0.52);
+    gh.addColorStop(0,alfa(this.P.luz,0.72)); gh.addColorStop(0.22,alfa(this.P.luz,0.22));
+    gh.addColorStop(1,alfa(this.P.luz,0));
+    g.fillStyle=gh; g.fillRect(0,0,W,H);
+    g.fillStyle=this.P.sol; g.beginPath(); g.arc(S.sol.x,S.sol.y,S.sol.r*1.05,0,TAU); g.fill();
+  },
+  massa(tracar,caixa,ce,cc,luzEm,dirEm,o={}){
+    g.save(); tracar(g); g.fillStyle=mix(ce,cc,0.28); g.fill();
+    // um único fio de luz na aresta virada para o sol
+    tracar(g); g.clip();
+    const gg=g.createLinearGradient(caixa[0]+caixa[2],caixa[1],caixa[0]+caixa[2]*0.2,caixa[1]+caixa[3]*0.5);
+    gg.addColorStop(0,alfa(this.P.luz,0.20)); gg.addColorStop(1,alfa(this.P.luz,0));
+    g.fillStyle=gg; g.fillRect(caixa[0]-30,caixa[1]-30,caixa[2]+60,caixa[3]+60);
+    g.restore();
+    if(o.contorno){
+      g.save(); g.strokeStyle=alfa(this.P.luz,0.55); g.lineWidth=2.2; g.lineCap='round';
+      g.beginPath();
+      for(const [px,py] of o.contorno) g.lineTo(px,py);
+      g.stroke(); g.restore();
+    }
+  },
+  pinta(tracar,ce,cc,o={}){
+    g.save();
+    if(o.traco){ g.lineWidth=o.traco; g.lineCap='round'; g.lineJoin='round';
+      tracar(g); g.strokeStyle=mix(ce,cc,0.35); g.stroke(); }
+    else { tracar(g); g.fillStyle=mix(ce,cc,0.3); g.fill(); }
+    g.restore();
+  },
+  fim(){},
+};
+
+// ---------------------------------------------------------------------------
+const ESTILOS={papel:ESTILO_PAPEL, pintura:ESTILO_PINTURA, grafico:ESTILO_GRAFICO};
+const NOMES={papel:'1 · diorama de papel', pintura:'2 · pintura a pincel', grafico:'3 · silhueta e luz'};
+function desenhar(){
+  tamanho();
+  const e=(location.search.match(/e=(\w+)/)||[])[1]||'papel';
+  document.getElementById('nome').textContent=NOMES[e]||e;
+  desenharCena(ESTILOS[e]||ESTILO_PAPEL);
+  window.__pronto=true;
+}
+desenhar();
+</script></body></html>

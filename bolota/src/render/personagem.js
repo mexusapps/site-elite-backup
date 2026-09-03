@@ -21,6 +21,7 @@
 import { TAU, clamp, lerp, easeOutCubic } from '../core/math.js';
 import { fbm, comAlfa, mistura } from './arte.js';
 import { Rig, CORPO } from './rig.js';
+import * as Arte from './imagens.js';
 
 export const CORES = {
   cascaEscura: '#7d4a22',
@@ -629,6 +630,72 @@ function pintarCarga(ctx, b, pal, t) {
   ctx.restore();
 }
 
+// --- caminho com arte ilustrada ------------------------------------------------
+//
+// Quando existem os recortes, a Bolota deixa de ser desenhada por código e passa
+// a ser um boneco articulado: cada peça é uma imagem que o mesmo esqueleto move.
+// É o mecanismo de "paper doll" que os jogos 2D ilustrados usam — e é por isso
+// que o trabalho do rig continua valendo inteiro.
+
+/** Desenha uma fatia vertical da imagem esticada ao longo de um osso. */
+function osso(ctx, im, t0, t1, ax, ay, bx, by, larg) {
+  const d = Math.hypot(bx - ax, by - ay);
+  if (d < 0.01) return;
+  const ang = Math.atan2(by - ay, bx - ax) - Math.PI / 2;
+  const sy = im.height * t0, sh = im.height * (t1 - t0);
+  ctx.save();
+  ctx.translate(ax, ay);
+  ctx.rotate(ang);
+  ctx.drawImage(im, 0, sy, im.width, sh, -larg / 2, 0, larg, d);
+  ctx.restore();
+}
+
+/** Um membro de dois ossos, a partir de uma imagem única esticada para baixo. */
+function membroImagem(ctx, nome, a, b, c, larg) {
+  const im = Arte.img(nome);
+  if (!im) return false;
+  osso(ctx, im, 0, 0.52, a.x, a.y, b.x, b.y, larg);
+  osso(ctx, im, 0.48, 1, b.x, b.y, c.x, c.y, larg * 0.94);
+  return true;
+}
+
+function desenharComRecortes(ctx, b, pal, p, dir) {
+  const frente = dir >= 0 ? 1 : 0, fundo = 1 - frente;
+  const bracoAtras = (k) => k === fundo || (p.mao[k].x - p.ombro[k].x) * dir < -1.5;
+  const larguraBraco = 13, larguraPerna = 15;
+
+  // lado de trás: mais escuro e um tico deslocado
+  ctx.save();
+  ctx.globalAlpha = 0.96;
+  ctx.filter = 'brightness(0.72) saturate(0.85)';
+  ctx.translate(-dir * 2.2, 0);
+  membroImagem(ctx, 'bolota_perna', p.anca[fundo], p.joelho[fundo], p.pe[fundo], larguraPerna);
+  for (let k = 0; k < 2; k++) {
+    if (bracoAtras(k)) membroImagem(ctx, 'bolota_braco', p.ombro[k], p.cotovelo[k], p.mao[k], larguraBraco);
+  }
+  ctx.filter = 'none';
+  ctx.restore();
+
+  const cx = (p.quadril.x + p.peito.x) / 2, cy = (p.quadril.y + p.peito.y) / 2;
+  Arte.porPivo(ctx, 'bolota_tronco', cx, cy, 30, p.giroTronco, 0.5, 0.5);
+
+  membroImagem(ctx, 'bolota_perna', p.anca[frente], p.joelho[frente], p.pe[frente], larguraPerna);
+
+  // broto atrás da cabeça, saindo do alto do chapéu
+  const topoCabeca = p.cabeca.y - CORPO.cabecaR * 0.92;
+  Arte.porPivo(ctx, 'bolota_broto', p.cabeca.x + 1, topoCabeca, 22,
+    p.giroCabeca + Math.sin(b.tempo * 2.1) * 0.06, 0.5, 1);
+
+  const piscando = b.piscando > 0 && Arte.tem('bolota_rosto_piscando');
+  Arte.porPivo(ctx, piscando ? 'bolota_rosto_piscando' : 'bolota_cabeca',
+    p.cabeca.x, p.cabeca.y, CORPO.cabecaR * 2.35,
+    p.giroCabeca + b.inclinacao * 0.25, 0.5, 0.5);
+
+  for (let k = 0; k < 2; k++) {
+    if (!bracoAtras(k)) membroImagem(ctx, 'bolota_braco', p.ombro[k], p.cotovelo[k], p.mao[k], larguraBraco);
+  }
+}
+
 // --- o personagem inteiro -----------------------------------------------------
 
 export class Personagem {
@@ -668,6 +735,15 @@ export class Personagem {
     ctx.translate(c.x, c.y);
     ctx.rotate(p.giroCorpo);
     ctx.scale(p.escalaX, p.escalaY);
+    if (dir < 0) ctx.scale(-1, 1);      // as peças são desenhadas olhando à direita
+
+    if (Arte.tem('bolota_cabeca')) {
+      desenharComRecortes(ctx, b, pal, espelharPose(p, dir), 1);
+      ctx.restore();
+      this.brilhoFinal(ctx, b, pal);
+      return;
+    }
+    if (dir < 0) ctx.scale(-1, 1);      // desfaz: o caminho por código já espelha
 
     // --- membros de trás ------------------------------------------------------
     const escuro = mistura(CORES.membroEscuro, CORES.sombra, 0.5);
@@ -719,6 +795,12 @@ export class Personagem {
 
     ctx.restore();
 
+    this.brilhoFinal(ctx, b, pal);
+  }
+
+  /** Clarão curto no pouso e no lançamento. */
+  brilhoFinal(ctx, b, pal) {
+    const c = b.corpo;
     const flash = Math.max(b.pousouAgora / 0.34, b.lancouAgora / 0.3);
     if (flash > 0.01) {
       ctx.save();
@@ -734,6 +816,23 @@ export class Personagem {
       ctx.restore();
     }
   }
+}
+
+/** Espelha a pose para o espaço "olhando à direita" das peças ilustradas. */
+function espelharPose(p, dir) {
+  if (dir >= 0) return p;
+  const e = (v) => ({ x: -v.x, y: v.y });
+  return {
+    ...p,
+    quadril: e(p.quadril), peito: e(p.peito), cabeca: e(p.cabeca),
+    giroTronco: -p.giroTronco, giroCabeca: -p.giroCabeca,
+    ombro: [e(p.ombro[1]), e(p.ombro[0])],
+    anca: [e(p.anca[1]), e(p.anca[0])],
+    mao: [e(p.mao[1]), e(p.mao[0])],
+    cotovelo: [e(p.cotovelo[1]), e(p.cotovelo[0])],
+    pe: [e(p.pe[1]), e(p.pe[0])],
+    joelho: [e(p.joelho[1]), e(p.joelho[0])],
+  };
 }
 
 function chaoDoCorpo(mundo, c) {
