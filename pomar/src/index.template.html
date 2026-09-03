@@ -1,0 +1,178 @@
+<title>POMAR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap">
+<style>
+  :root{
+    --te:1;
+    --creme:#fff6e6;
+    --creme2:#ffeccc;
+    --tinta:#4a3020;
+    --tinta2:#8a6a4e;
+    --laranja:#e0782a;
+    --laranja2:#ffb45e;
+    --verde:#3f8f4a;
+    --rosa:#ff7b8c;
+    --painel:rgba(255,250,240,0.96);
+    --fonte:'Baloo 2','Trebuchet MS',system-ui,sans-serif;
+  }
+  html[data-paleta="suave"]{ --creme:#f6f3ec; --creme2:#eae5da; --laranja:#a8814e; --laranja2:#cbab7e; --verde:#6d8a5e; --tinta:#4c463c; --tinta2:#8b8375; }
+  html[data-paleta="forte"]{ --creme:#fff; --creme2:#f0f0f0; --laranja:#c00000; --laranja2:#ff8a00; --verde:#0a7a20; --tinta:#000; --tinta2:#333; --painel:#fff; }
+
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;padding:0}
+  body{
+    background:var(--creme);
+    color:var(--tinta);
+    font-family:var(--fonte);
+    overflow:hidden;
+    overscroll-behavior:none;
+    -webkit-font-smoothing:antialiased;
+    touch-action:none;
+    user-select:none;
+  }
+  #jogo{position:fixed;inset:0;display:block;background:var(--creme);cursor:pointer}
+
+  #ui{
+    position:fixed;inset:0;z-index:10;
+    display:flex;align-items:center;justify-content:center;
+    padding:calc(20px * var(--te));
+    font-size:calc(16px * var(--te));
+    overflow-y:auto;
+  }
+  #ui[hidden]{display:none}
+  .tela{display:none;width:100%;max-width:min(1000px,100%);animation:sobe .2s ease-out}
+  .tela.on{display:block}
+  @keyframes sobe{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.tela{animation:none}}
+
+  .painel{
+    background:var(--painel);
+    border:calc(3px * var(--te)) solid rgba(160,110,60,.28);
+    border-radius:calc(26px * var(--te));
+    padding:calc(26px * var(--te));
+    max-width:min(560px,100%);margin:0 auto;
+    box-shadow:0 calc(14px * var(--te)) calc(40px * var(--te)) rgba(120,80,40,.22);
+  }
+  .painel.largo{max-width:min(940px,100%)}
+
+  h1,h2,h3{margin:0;font-weight:800;text-wrap:balance}
+  h2{font-size:calc(32px * var(--te));margin-bottom:calc(10px * var(--te));color:var(--laranja)}
+  h3{font-size:calc(19px * var(--te));margin:calc(18px * var(--te)) 0 calc(6px * var(--te));color:var(--verde)}
+  h3:first-child{margin-top:0}
+  p{margin:0 0 calc(10px * var(--te));line-height:1.5}
+  p.fino{font-size:calc(14.5px * var(--te));color:var(--tinta2)}
+  b{color:var(--laranja)}
+  kbd{
+    font-family:var(--fonte);font-weight:700;font-size:calc(13px * var(--te));
+    border:2px solid rgba(160,110,60,.35);border-radius:calc(8px * var(--te));
+    padding:calc(1px * var(--te)) calc(7px * var(--te));background:#fff;
+  }
+
+  /* ---------- capa ---------- */
+  .capa{text-align:center;padding:calc(10px * var(--te))}
+  .logo{
+    display:flex;justify-content:center;gap:.02em;
+    font-size:clamp(58px,14vw,140px);font-weight:800;letter-spacing:.03em;line-height:1;
+  }
+  .logo span{
+    background:linear-gradient(180deg,#ffd166 0%,var(--laranja2) 45%,var(--laranja) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 calc(5px * var(--te)) 0 rgba(160,90,30,.28));
+    animation:pula 2.4s ease-in-out infinite;
+  }
+  .logo span:nth-child(2){animation-delay:.1s}
+  .logo span:nth-child(3){animation-delay:.2s}
+  .logo span:nth-child(4){animation-delay:.3s}
+  .logo span:nth-child(5){animation-delay:.4s}
+  @keyframes pula{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  @media (prefers-reduced-motion:reduce){.logo span{animation:none}}
+  .lema{color:var(--tinta2);font-size:calc(18px * var(--te));margin:calc(4px * var(--te)) 0 calc(22px * var(--te));line-height:1.45}
+  .rodape{
+    color:var(--tinta2);font-size:calc(14px * var(--te));
+    margin-top:calc(18px * var(--te));
+    display:inline-block;
+    background:rgba(255,250,240,.85);
+    border-radius:999px;padding:calc(5px * var(--te)) calc(16px * var(--te));
+  }
+
+  /* ---------- botões ---------- */
+  .menu{display:flex;flex-direction:column;gap:calc(10px * var(--te));align-items:center}
+  .menu.linha{flex-direction:row;justify-content:center;flex-wrap:wrap;margin-top:calc(20px * var(--te))}
+  button{
+    font-family:var(--fonte);font-size:calc(19px * var(--te));font-weight:700;
+    color:var(--tinta);
+    background:#fff;
+    border:calc(3px * var(--te)) solid rgba(160,110,60,.32);
+    border-radius:calc(999px);
+    padding:calc(12px * var(--te)) calc(32px * var(--te));
+    min-width:calc(240px * var(--te));min-height:calc(52px * var(--te));
+    cursor:pointer;
+    box-shadow:0 calc(4px * var(--te)) 0 rgba(160,110,60,.28);
+    transition:transform .08s,box-shadow .08s,background .12s;
+  }
+  .menu.linha button{min-width:calc(170px * var(--te))}
+  button:hover{background:#fff6e6}
+  button:active{transform:translateY(3px);box-shadow:0 calc(1px * var(--te)) 0 rgba(160,110,60,.28)}
+  button:focus-visible{outline:calc(3px * var(--te)) solid var(--laranja);outline-offset:3px}
+  button.grande{
+    background:linear-gradient(180deg,var(--laranja2),var(--laranja));
+    color:#fff;border-color:rgba(140,70,20,.35);
+    box-shadow:0 calc(5px * var(--te)) 0 rgba(150,80,25,.5);
+    font-size:calc(22px * var(--te));
+  }
+  button.grande:hover{filter:brightness(1.06)}
+  button.perigo{color:#c0392b;border-color:rgba(192,57,43,.35)}
+
+  /* ---------- colunas ---------- */
+  .colunas{display:grid;grid-template-columns:1fr;gap:calc(22px * var(--te))}
+  @media (min-width:760px){.colunas{grid-template-columns:1fr 1fr}}
+
+  .ctl{display:flex;align-items:center;gap:calc(10px * var(--te));margin-bottom:calc(11px * var(--te));font-size:calc(15px * var(--te))}
+  .ctl>span{flex:0 0 calc(120px * var(--te))}
+  .ctl.marca{align-items:flex-start}
+  .ctl.marca>span{flex:1}
+  input[type=range]{flex:1;accent-color:var(--laranja);min-width:0;height:calc(26px * var(--te))}
+  input[type=checkbox]{width:calc(22px * var(--te));height:calc(22px * var(--te));accent-color:var(--laranja);flex:none}
+  select{
+    flex:1;font-family:var(--fonte);font-size:calc(15px * var(--te));font-weight:600;
+    background:#fff;color:var(--tinta);border:2px solid rgba(160,110,60,.3);
+    border-radius:calc(12px * var(--te));padding:calc(7px * var(--te)) calc(10px * var(--te));
+  }
+  output{flex:0 0 calc(46px * var(--te));text-align:right;color:var(--laranja);font-weight:800}
+  input:focus-visible,select:focus-visible{outline:calc(3px * var(--te)) solid var(--laranja);outline-offset:2px}
+
+  /* ---------- álbum ---------- */
+  .album{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(104px * var(--te)),1fr));gap:calc(10px * var(--te));margin-top:calc(12px * var(--te))}
+  .album .fruta{
+    display:flex;flex-direction:column;align-items:center;gap:calc(2px * var(--te));
+    background:#fffaf0;border:2px solid rgba(160,110,60,.22);
+    border-radius:calc(18px * var(--te));padding:calc(8px * var(--te)) calc(4px * var(--te));
+  }
+  .album .fruta span{font-size:calc(13px * var(--te));font-weight:700;color:var(--tinta2)}
+  .album .fruta.oculta{opacity:.75}
+  .album canvas{display:block}
+
+.cadeia{
+    display:flex;flex-wrap:wrap;align-items:center;gap:calc(2px * var(--te));
+    margin:calc(8px * var(--te)) 0 calc(4px * var(--te));
+  }
+  .cadeia canvas{display:block}
+  .cadeia .seta{color:var(--tinta2);font-size:calc(20px * var(--te));font-weight:700;opacity:.6}
+
+  /* ---------- marcas ---------- */
+  dl.marcas{margin:calc(6px * var(--te)) 0 0}
+  dl.marcas>div{display:flex;justify-content:space-between;gap:calc(14px * var(--te));padding:calc(9px * var(--te)) 0;border-bottom:2px dotted rgba(160,110,60,.22)}
+  dl.marcas dt{color:var(--tinta2);font-size:calc(15px * var(--te));margin:0}
+  dl.marcas dd{margin:0;font-weight:800;font-size:calc(17px * var(--te))}
+  dl.marcas .recorde dd,dl.marcas .recorde dt{color:var(--laranja)}
+
+  @media (max-width:620px){
+    .painel{padding:calc(18px * var(--te));border-radius:calc(20px * var(--te))}
+    button{min-width:calc(200px * var(--te));font-size:calc(17px * var(--te))}
+  }
+</style>
+
+<canvas id="jogo" tabindex="0" aria-label="POMAR — jogo de juntar frutas"></canvas>
+<div id="ui" hidden></div>
+<script>__SCRIPT__</script>

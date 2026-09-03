@@ -1,0 +1,16 @@
+{
+  "name": "pomar",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "POMAR — jogo de fisica e combinacao de frutas",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test/run.mjs",
+    "fis": "node test/physics.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "playwright": "^1.62.1"
+  },
+  "license": "MIT"
+}
